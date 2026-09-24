@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { withGrowth } from "@/lib/growth";
+import { withCameraFade, withGrowth } from "@/lib/growth";
 import { createRandom, groundHeight } from "@/lib/terrain";
 
 interface Tree {
@@ -12,27 +12,25 @@ interface Tree {
   lean: number;
 }
 
-/** Hand-placed trees that frame the far end of the garden, around the final bloom. */
-const FEATURE_TREES: Tree[] = [
-  { x: -2.8, z: -11.8, scale: 1.5, lean: 0.05 },
-  { x: 4.0, z: -12.6, scale: 1.25, lean: -0.06 },
-  { x: -12.6, z: -7.2, scale: 1.35, lean: 0.04 },
-  { x: 12.9, z: -6.2, scale: 1.4, lean: -0.05 },
-  { x: -13.4, z: 3.0, scale: 1.2, lean: 0.03 },
-  { x: 13.2, z: 4.2, scale: 1.15, lean: -0.03 },
-];
+const TREE_COUNT = 44;
+/**
+ * The trees ring the garden where they frame the view from any side. The camera
+ * can orbit out among them (farther on a portrait phone), so trees fade away as
+ * it gets close instead of blocking the view.
+ */
+const RING_INNER = 17;
+const RING_DEPTH = 8;
 
 const CANOPY_COLORS = ["#1e4a38", "#245240", "#1b4034", "#2d5b44", "#20463f"].map((c) => new THREE.Color(c));
 
 export default function Trees() {
   const trees = useMemo(() => {
     const rand = createRandom(7);
-    const ring: Tree[] = Array.from({ length: 28 }, () => {
-      const a = rand() * Math.PI * 2;
-      const r = 17 + rand() * 9;
-      return { x: Math.cos(a) * r, z: Math.sin(a) * r, scale: 0.85 + rand() * 0.75, lean: (rand() - 0.5) * 0.12 };
+    return Array.from({ length: TREE_COUNT }, (_, i): Tree => {
+      const a = ((i + rand() * 0.8) / TREE_COUNT) * Math.PI * 2;
+      const r = RING_INNER + rand() * RING_DEPTH;
+      return { x: Math.cos(a) * r, z: Math.sin(a) * r, scale: 1.2 + rand() * 1, lean: (rand() - 0.5) * 0.12 };
     });
-    return [...FEATURE_TREES, ...ring];
   }, []);
 
   // Each canopy is a cluster of three or four low-poly blobs.
@@ -58,8 +56,14 @@ export default function Trees() {
 
   const trunkGeometry = useMemo(() => new THREE.CylinderGeometry(0.1, 0.18, 1, 6).translate(0, 0.5, 0), []);
   const canopyGeometry = useMemo(() => new THREE.IcosahedronGeometry(1, 1), []);
-  const trunkMaterial = useMemo(() => withGrowth(new THREE.MeshLambertMaterial({ color: "#3b2d29" })), []);
-  const canopyMaterial = useMemo(() => withGrowth(new THREE.MeshLambertMaterial({ flatShading: true })), []);
+  const trunkMaterial = useMemo(
+    () => withCameraFade(withGrowth(new THREE.MeshLambertMaterial({ color: "#3b2d29" })), 3, 7),
+    [],
+  );
+  const canopyMaterial = useMemo(
+    () => withCameraFade(withGrowth(new THREE.MeshLambertMaterial({ flatShading: true })), 3, 7),
+    [],
+  );
 
   const trunks = useRef<THREE.InstancedMesh>(null!);
   const canopies = useRef<THREE.InstancedMesh>(null!);

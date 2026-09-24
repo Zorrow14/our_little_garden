@@ -18,6 +18,7 @@ interface FlowerProps {
   spec: FlowerSpec;
   position: [number, number, number];
   scale?: number;
+  /** Offset from looking straight at the viewer, in radians. */
   facing?: number;
   status?: FlowerStatus;
   /** Pulses the pool of light beneath the flower to draw the eye to it. */
@@ -64,6 +65,8 @@ export default function Flower({
   const openness = useRef(targetOpenness(spec, status));
   const glow = useRef(glowLevel(spec, status));
   const hover = useRef(0);
+  /** Heading around the vertical axis; eases toward the camera so the flower faces her from any side. */
+  const yaw = useRef<number | null>(null);
 
   const seed = useMemo(() => hashString(id), [id]);
   const phase = useMemo(() => createRandom(seed)() * Math.PI * 2, [seed]);
@@ -116,6 +119,11 @@ export default function Flower({
 
   useCursor(hovered && interactive);
 
+  // Turn first, then sway, so the sway stays relative to the way the flower is facing.
+  useLayoutEffect(() => {
+    root.current.rotation.order = "YXZ";
+  }, []);
+
   useFrame((state, dt) => {
     const t = state.clock.elapsedTime;
     openness.current = THREE.MathUtils.damp(openness.current, targetOpenness(spec, status), 0.9, dt);
@@ -124,6 +132,16 @@ export default function Flower({
 
     const r = root.current;
     r.scale.setScalar(scale * (1 + hover.current * 0.06));
+
+    // Slowly turn toward the viewer, the way flowers follow the sun.
+    const toCamera = Math.atan2(state.camera.position.x - position[0], state.camera.position.z - position[2]) + facing;
+    if (yaw.current === null) {
+      yaw.current = toCamera;
+    } else {
+      const shortestTurn = Math.atan2(Math.sin(toCamera - yaw.current), Math.cos(toCamera - yaw.current));
+      yaw.current += shortestTurn * (1 - Math.exp(-1.5 * dt));
+    }
+    r.rotation.y = yaw.current;
     if (floating) {
       r.position.y = position[1] + Math.sin(t * 0.9 + phase) * 0.012;
       r.rotation.z = Math.sin(t * 0.7 + phase) * 0.02;
@@ -155,7 +173,7 @@ export default function Flower({
   const poolSize = spec.hitRadius * 3.4;
 
   return (
-    <group ref={root} position={position} rotation-y={facing}>
+    <group ref={root} position={position}>
       <mesh
         visible={false}
         position={[head.x / 2, hitHeight / 2 - 0.1, 0]}

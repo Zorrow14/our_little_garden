@@ -27,11 +27,26 @@ export default function Ground() {
       // Patchy moss, darker mud at the waterline, a worn strip along the path, dark hills at the rim.
       const patches = 0.5 + 0.25 * Math.sin(x * 0.7) * Math.cos(z * 0.6) + 0.25 * Math.sin(x * 1.9 + z * 1.3);
       c.copy(MOSS).lerp(MOSS_LIGHT, patches);
-      c.lerp(TRODDEN, (1 - smoothstep(0.3, 1.1, distanceToPath(x, z))) * 0.6);
+      // The path stays within the garden, so skip the (slow) distance check out on the hills.
+      if (Math.hypot(x, z) < 14) c.lerp(TRODDEN, (1 - smoothstep(0.3, 1.1, distanceToPath(x, z))) * 0.6);
       c.lerp(MUD, 1 - smoothstep(POND.radius * 0.8, POND.radius * 1.15, distanceToPond(x, z)));
       c.lerp(HILLS, smoothstep(11, 20, Math.hypot(x, z)));
       c.toArray(colors, i * 3);
     }
+    g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    g.computeVertexNormals();
+    return g;
+  }, []);
+
+  // A coarse ring carrying the hills out to the horizon, under the tree ring. It sits a
+  // hair below the detailed ground so the two never fight where they overlap.
+  const skirt = useMemo(() => {
+    const g = new THREE.RingGeometry(30, 110, 72, 6);
+    g.rotateX(-Math.PI / 2);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) pos.setY(i, groundHeight(pos.getX(i), pos.getZ(i)) - 0.06);
+    const colors = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i++) HILLS.toArray(colors, i * 3);
     g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     g.computeVertexNormals();
     return g;
@@ -42,10 +57,16 @@ export default function Ground() {
   useEffect(
     () => () => {
       geometry.dispose();
+      skirt.dispose();
       material.dispose();
     },
-    [geometry, material],
+    [geometry, skirt, material],
   );
 
-  return <mesh geometry={geometry} material={material} />;
+  return (
+    <>
+      <mesh geometry={geometry} material={material} />
+      <mesh geometry={skirt} material={material} />
+    </>
+  );
 }

@@ -43,7 +43,7 @@ export default function GardenCanvas() {
         onFallback={degrade}
         flipflops={3}
       />
-      <fog attach="fog" args={["#262a4e", 16, 52]} />
+      <fog attach="fog" args={["#262a4e", 16, 62]} />
       <SceneReady />
       <GrowthDriver />
       <Sky />

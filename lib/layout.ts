@@ -5,7 +5,7 @@ export interface FlowerSpot {
   x: number;
   z: number;
   scale: number;
-  /** Rotation around the vertical axis, so each flower turns a little toward the path. */
+  /** How far the flower looks off to one side of the viewer, in radians, so they don't all stare straight at her. */
   facing: number;
 }
 
@@ -16,10 +16,10 @@ export interface FlowerSpot {
  */
 export const FLOWER_SPOTS: Record<FlowerKind, FlowerSpot> = {
   lotus: { x: 0.35, z: 2.0, scale: 1.25, facing: 0 },
-  lily: { x: -2.75, z: 0.8, scale: 1.45, facing: 0.5 },
-  tulip: { x: 3.1, z: -0.4, scale: 1.2, facing: -0.5 },
-  rose: { x: -2.9, z: -3.7, scale: 1.25, facing: 0.4 },
-  daisy: { x: 2.8, z: -4.1, scale: 1.3, facing: -0.4 },
+  lily: { x: -2.75, z: 0.8, scale: 1.45, facing: 0.2 },
+  tulip: { x: 3.1, z: -0.4, scale: 1.2, facing: -0.2 },
+  rose: { x: -2.9, z: -3.7, scale: 1.25, facing: 0.15 },
+  daisy: { x: 2.8, z: -4.1, scale: 1.3, facing: -0.15 },
   orchid: { x: -0.6, z: -5.4, scale: 1.25, facing: 0.1 },
   final: { x: 0.7, z: -8.7, scale: 1.7, facing: 0 },
 };

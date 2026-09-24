@@ -157,11 +157,10 @@ export default function CameraRig() {
       rotateSpeed={0.5}
       zoomSpeed={0.7}
       minDistance={3}
-      maxDistance={15 * pull}
+      // A little past the starting view.
+      maxDistance={14.5 * pull}
       minPolarAngle={0.5}
       maxPolarAngle={1.32}
-      minAzimuthAngle={-1.5}
-      maxAzimuthAngle={1.5}
     />
   );
 }
