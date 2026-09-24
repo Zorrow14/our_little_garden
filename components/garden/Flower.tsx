@@ -1,6 +1,6 @@
 "use client";
 
-import { Html, useCursor } from "@react-three/drei";
+import { Html, Sparkles, useCursor } from "@react-three/drei";
 import { type ThreeEvent, useFrame } from "@react-three/fiber";
 import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
@@ -183,7 +183,7 @@ export default function Flower({
         {spec.layers.map((layer, i) => (
           <PetalRing key={i} layer={layer} material={petalMaterial} openness={openness} seed={seed + i} />
         ))}
-        <Center spec={spec} lightRef={light} />
+        <Center spec={spec} lightRef={light} awake={status !== "locked"} />
       </group>
 
       {hovered && interactive && label && (
@@ -298,7 +298,16 @@ function Stem({ curve, spec, phase }: { curve: THREE.CatmullRomCurve3; spec: Flo
   );
 }
 
-function Center({ spec, lightRef }: { spec: FlowerSpec; lightRef: RefObject<THREE.PointLight | null> }) {
+function Center({
+  spec,
+  lightRef,
+  awake,
+}: {
+  spec: FlowerSpec;
+  lightRef: RefObject<THREE.PointLight | null>;
+  /** False while the final bloom is still locked. */
+  awake: boolean;
+}) {
   const color = spec.centerColor;
   switch (spec.center) {
     case "pod":
@@ -341,6 +350,7 @@ function Center({ spec, lightRef }: { spec: FlowerSpec; lightRef: RefObject<THRE
             <spriteMaterial map={getGlowTexture()} color={color} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
           </sprite>
           <pointLight ref={lightRef} color="#ffd98a" intensity={0} distance={6} decay={1.6} />
+          {awake && <Sparkles count={36} scale={[1.6, 1.4, 1.6]} position-y={0.25} size={3.5} speed={0.35} noise={0.6} color="#ffe3a0" />}
         </group>
       );
     default:

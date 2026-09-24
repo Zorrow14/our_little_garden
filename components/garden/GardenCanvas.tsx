@@ -16,6 +16,7 @@ import Pond from "./Pond";
 import Rocks from "./Rocks";
 import Sky from "./Sky";
 import Trees from "./Trees";
+import Wildflowers from "./Wildflowers";
 
 // NeutralToneMapping keeps petal pinks and whites truer than R3F's ACES default.
 const GL = { antialias: true, powerPreference: "high-performance", toneMapping: THREE.NeutralToneMapping } as const;
@@ -50,6 +51,7 @@ export default function GardenCanvas() {
       <Path />
       <Trees />
       <Grass />
+      <Wildflowers />
       <Flowers />
       <CameraRig />
       {debug && <Stats />}

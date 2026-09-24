@@ -1,12 +1,31 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { sharedUniforms } from "@/lib/growth";
+import { useRef } from "react";
+import * as THREE from "three";
+import { bloomedLetterCount, LETTER_IDS, useGardenStore } from "@/lib/gardenStore";
+import { garden, sharedUniforms } from "@/lib/growth";
 
-/** Advances the shared shader clock once per frame. */
+/**
+ * Eases the garden's growth toward the share of letters read, and advances the
+ * shared shader clock. Everything that grows reads `garden.growth` each frame.
+ */
 export default function GrowthDriver() {
-  useFrame((state) => {
+  const hydrated = useGardenStore((s) => s.hydrated);
+  const bloomed = useGardenStore(bloomedLetterCount);
+  const settled = useRef(false);
+
+  useFrame((state, dt) => {
+    const target = bloomed / LETTER_IDS.length;
+    // A returning visitor sees the garden as she left it; growth only animates after a new letter.
+    if (!settled.current && hydrated) {
+      garden.growth = target;
+      settled.current = true;
+    }
+    garden.growth = THREE.MathUtils.damp(garden.growth, target, 0.6, dt);
     sharedUniforms.uTime.value = state.clock.elapsedTime;
+    sharedUniforms.uSaturation.value = 0.45 + 0.55 * garden.growth;
   });
+
   return null;
 }

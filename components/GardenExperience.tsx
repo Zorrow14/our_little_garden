@@ -3,6 +3,7 @@
 import { MotionConfig } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useEffect } from "react";
+import GardenHud from "@/components/ui/GardenHud";
 import IntroOverlay from "@/components/ui/IntroOverlay";
 import LetterModal from "@/components/ui/LetterModal";
 import { STORAGE_KEY, useGardenStore } from "@/lib/gardenStore";
@@ -45,6 +46,7 @@ export default function GardenExperience() {
         <div className="absolute inset-0">
           <GardenCanvas />
         </div>
+        <GardenHud />
         <LetterModal />
         <IntroOverlay />
       </main>

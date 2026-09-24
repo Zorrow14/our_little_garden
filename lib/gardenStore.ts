@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import { memories } from "@/data/memories";
 
 export const STORAGE_KEY = "our-little-garden";
@@ -56,6 +56,37 @@ export function isFinalUnlocked(s: BloomState) {
   return bloomedLetterCount(s) === LETTER_IDS.length;
 }
 
+/**
+ * localStorage that ignores writes until saved progress has been restored.
+ * Zustand's persist writes on every state change, so any update made before
+ * rehydration (URL flags, scene ready, hover) would otherwise overwrite her
+ * opened letters with an empty list.
+ */
+const progressStorage: StateStorage = {
+  getItem: (name) => {
+    try {
+      return localStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name, value) => {
+    if (!useGardenStore.getState().hydrated) return;
+    try {
+      localStorage.setItem(name, value);
+    } catch {
+      // Storage full or unavailable (e.g. some private modes): progress just won't be remembered.
+    }
+  },
+  removeItem: (name) => {
+    try {
+      localStorage.removeItem(name);
+    } catch {
+      // Nothing to remove if storage is unavailable.
+    }
+  },
+};
+
 export const useGardenStore = create<GardenState>()(
   persist(
     (set, get) => ({
@@ -110,7 +141,7 @@ export const useGardenStore = create<GardenState>()(
     }),
     {
       name: STORAGE_KEY,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => progressStorage),
       partialize: (s) => ({ opened: s.opened }),
       // Rehydrated from GardenExperience after mount, so server and client render the same first frame.
       skipHydration: true,
