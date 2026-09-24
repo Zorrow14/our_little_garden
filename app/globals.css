@@ -8,7 +8,38 @@ body {
 }
 
 body {
-  @apply bg-night text-cream antialiased;
+  @apply bg-night text-moon antialiased;
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  /* The striped border of an airmail envelope, in the garden's rose and midnight blue. */
+  .airmail {
+    border: 7px solid transparent;
+    background:
+      linear-gradient(theme("colors.envelope"), theme("colors.envelope")) padding-box,
+      repeating-linear-gradient(
+          -45deg,
+          theme("colors.rose") 0 10px,
+          theme("colors.envelope") 10px 16px,
+          theme("colors.air") 16px 26px,
+          theme("colors.envelope") 26px 32px
+        )
+        border-box;
+  }
+
+  /* Faint creases where the letter was folded in thirds. */
+  .paper-creases {
+    background-image: linear-gradient(
+      to bottom,
+      transparent calc(33.33% - 1px),
+      rgb(39 42 76 / 0.07) 33.33%,
+      transparent calc(33.33% + 2px),
+      transparent calc(66.66% - 1px),
+      rgb(39 42 76 / 0.07) 66.66%,
+      transparent calc(66.66% + 2px)
+    );
+    background-attachment: local;
+  }
 }

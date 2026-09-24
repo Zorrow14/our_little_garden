@@ -6,11 +6,13 @@ import { useEffect, useState } from "react";
 import * as THREE from "three";
 import { useGardenStore } from "@/lib/gardenStore";
 import CameraRig from "./CameraRig";
+import Flowers from "./Flowers";
 import Grass from "./Grass";
 import Ground from "./Ground";
 import GrowthDriver from "./GrowthDriver";
 import Lights from "./Lights";
 import Path from "./Path";
+import Pond from "./Pond";
 import Rocks from "./Rocks";
 import Sky from "./Sky";
 import Trees from "./Trees";
@@ -43,10 +45,12 @@ export default function GardenCanvas() {
       <Sky />
       <Lights />
       <Ground />
+      <Pond />
       <Rocks />
       <Path />
       <Trees />
       <Grass />
+      <Flowers />
       <CameraRig />
       {debug && <Stats />}
     </Canvas>

@@ -1,19 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Cormorant_Garamond } from "next/font/google";
-import localFont from "next/font/local";
+import { Literata, Nothing_You_Could_Do } from "next/font/google";
 import "./globals.css";
 
-const sans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-sans",
-  weight: "100 900",
-});
-
-const serif = Cormorant_Garamond({
+// A book face for reading the letters, and a real-looking hand for everything written "by hand".
+const serif = Literata({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
   style: ["normal", "italic"],
   variable: "--font-serif",
+});
+
+const hand = Nothing_You_Could_Do({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-hand",
 });
 
 export const metadata: Metadata = {
@@ -27,7 +26,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0b1020",
+  themeColor: "#0e1630",
 };
 
 export default function RootLayout({
@@ -37,9 +36,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${sans.variable} ${serif.variable} font-sans`}>
-        {children}
-      </body>
+      <body className={`${serif.variable} ${hand.variable} font-serif`}>{children}</body>
     </html>
   );
 }
