@@ -1,33 +1,60 @@
 "use client";
 
+import { PerformanceMonitor, Stats } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { useEffect, useState } from "react";
+import * as THREE from "three";
+import { useGardenStore } from "@/lib/gardenStore";
+import CameraRig from "./CameraRig";
+import Grass from "./Grass";
+import Ground from "./Ground";
+import GrowthDriver from "./GrowthDriver";
+import Lights from "./Lights";
+import Path from "./Path";
+import Rocks from "./Rocks";
+import Sky from "./Sky";
+import Trees from "./Trees";
 
-// Placeholder scene that proves the R3F/drei stack renders.
-// Phase 2 replaces it with the real garden environment.
+// NeutralToneMapping keeps petal pinks and whites truer than R3F's ACES default.
+const GL = { antialias: true, powerPreference: "high-performance", toneMapping: THREE.NeutralToneMapping } as const;
+
 export default function GardenCanvas() {
+  const debug = useGardenStore((s) => s.debug);
+  const setQuality = useGardenStore((s) => s.setQuality);
+  // Start at a moderate pixel ratio; PerformanceMonitor raises or lowers it to hold the frame rate.
+  const [dpr, setDpr] = useState(() => Math.min(1.5, window.devicePixelRatio || 1));
+
+  const degrade = () => {
+    setDpr(1);
+    setQuality("low");
+  };
+
   return (
-    <Canvas
-      // Cap pixel ratio at 2 so high-DPI phones don't render 3x the pixels.
-      dpr={[1, 2]}
-      camera={{ position: [0, 2.5, 6], fov: 45 }}
-      gl={{ antialias: true, powerPreference: "high-performance" }}
-    >
-      <color attach="background" args={["#0b1020"]} />
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[3, 5, 2]} intensity={1.2} />
-
-      <mesh position={[0, 0.5, 0]}>
-        <icosahedronGeometry args={[0.5, 1]} />
-        <meshStandardMaterial color="#f4b6c2" flatShading />
-      </mesh>
-
-      <mesh rotation-x={-Math.PI / 2}>
-        <circleGeometry args={[4, 48]} />
-        <meshStandardMaterial color="#1f3a2c" />
-      </mesh>
-
-      <OrbitControls enablePan={false} />
+    <Canvas dpr={dpr} gl={GL} camera={{ fov: 45, near: 0.1, far: 220, position: [0, 4, 12] }}>
+      <PerformanceMonitor
+        onIncline={() => setDpr(Math.min(2, window.devicePixelRatio || 1))}
+        onDecline={degrade}
+        onFallback={degrade}
+        flipflops={3}
+      />
+      <fog attach="fog" args={["#262a4e", 16, 52]} />
+      <SceneReady />
+      <GrowthDriver />
+      <Sky />
+      <Lights />
+      <Ground />
+      <Rocks />
+      <Path />
+      <Trees />
+      <Grass />
+      <CameraRig />
+      {debug && <Stats />}
     </Canvas>
   );
+}
+
+function SceneReady() {
+  const setSceneReady = useGardenStore((s) => s.setSceneReady);
+  useEffect(() => setSceneReady(), [setSceneReady]);
+  return null;
 }
