@@ -21,15 +21,15 @@ const INTRO_POSE: Pose = {
   target: new THREE.Vector3(0, 0, -5),
 };
 
-/** Looking over the pond, with the lotus front and centre. */
+/** Looking down over the pond at the whole garden, with the lotus front and centre. */
 const GARDEN_POSE: Pose = {
-  position: new THREE.Vector3(0.8, 3.7, 11.4),
+  position: new THREE.Vector3(0.8, 6.4, 10.6),
   target: new THREE.Vector3(0, 0.3, -0.9),
 };
 
 /** Tall phone screens back the camera off so the whole garden still fits side to side. */
 function portraitPull(aspect: number) {
-  return aspect >= 1 ? 1 : THREE.MathUtils.lerp(1.45, 1, THREE.MathUtils.clamp((aspect - 0.45) / 0.55, 0, 1));
+  return aspect >= 1 ? 1 : THREE.MathUtils.lerp(1.6, 1, THREE.MathUtils.clamp((aspect - 0.45) / 0.55, 0, 1));
 }
 
 function gardenPose(aspect: number): Pose {

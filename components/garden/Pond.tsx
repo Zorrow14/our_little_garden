@@ -49,7 +49,7 @@ const fragmentShader = /* glsl */ `
     vec3 view = normalize(cameraPosition - vWorld);
     float fresnel = pow(1.0 - clamp(dot(view, n), 0.0, 1.0), 3.0);
     color = mix(color, uSky, fresnel * 0.75);
-    float moon = pow(max(dot(reflect(-view, n), uMoonDirection), 0.0), 90.0) * 1.6;
+    float moon = pow(max(dot(reflect(-view, n), uMoonDirection), 0.0), 160.0) * 0.9;
 
     // Slow rings spreading out from the lotus.
     float r = length(p - uLotus);
