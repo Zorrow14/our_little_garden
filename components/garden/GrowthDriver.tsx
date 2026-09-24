@@ -8,7 +8,7 @@ import { garden, sharedUniforms } from "@/lib/growth";
 
 /**
  * Eases the garden's growth toward the share of letters read, and advances the
- * shared shader clock. Everything that grows reads `garden.growth` each frame.
+ * shared shader clock and breeze. Everything that grows reads `garden.growth` each frame.
  */
 export default function GrowthDriver() {
   const hydrated = useGardenStore((s) => s.hydrated);
@@ -23,8 +23,11 @@ export default function GrowthDriver() {
       settled.current = true;
     }
     garden.growth = THREE.MathUtils.damp(garden.growth, target, 0.6, dt);
-    sharedUniforms.uTime.value = state.clock.elapsedTime;
+    const t = state.clock.elapsedTime;
+    sharedUniforms.uTime.value = t;
     sharedUniforms.uSaturation.value = 0.45 + 0.55 * garden.growth;
+    // A gentle breeze that rises and falls in slow, overlapping gusts.
+    sharedUniforms.uWind.value = 0.75 + 0.3 * Math.sin(t * 0.23) + 0.15 * Math.sin(t * 0.61 + 1.3);
   });
 
   return null;

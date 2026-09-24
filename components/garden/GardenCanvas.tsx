@@ -1,11 +1,14 @@
 "use client";
 
-import { PerformanceMonitor, Stats } from "@react-three/drei";
+import { PerformanceMonitor } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { useEffect, useState } from "react";
 import * as THREE from "three";
 import { useGardenStore } from "@/lib/gardenStore";
 import CameraRig from "./CameraRig";
+import DebugInfo from "./DebugInfo";
+import FallingPetals from "./FallingPetals";
+import Fireflies from "./Fireflies";
 import Flowers from "./Flowers";
 import Grass from "./Grass";
 import Ground from "./Ground";
@@ -53,8 +56,10 @@ export default function GardenCanvas() {
       <Grass />
       <Wildflowers />
       <Flowers />
+      <Fireflies />
+      <FallingPetals />
       <CameraRig />
-      {debug && <Stats />}
+      {debug && <DebugInfo />}
     </Canvas>
   );
 }
