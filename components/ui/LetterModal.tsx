@@ -243,7 +243,8 @@ function VoiceNote({ src, title }: { src: string; title?: string }) {
   const toggle = () => {
     const element = audio.current;
     if (!element) return;
-    if (element.paused) void element.play();
+    // play() rejects if the file is missing or can't be decoded; just leave the button in its play state.
+    if (element.paused) element.play().catch(() => setPlaying(false));
     else element.pause();
   };
 

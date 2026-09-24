@@ -11,14 +11,63 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:3000. To test on a phone, run `npm run dev -- -H 0.0.0.0` and open `http://<your-computer's-LAN-IP>:3000` on a phone on the same Wi-Fi.
+Then open http://localhost:3000. To try it on a phone, run `npm run dev -- -H 0.0.0.0` and open `http://<your-computer's-LAN-IP>:3000` on a phone on the same Wi-Fi.
+
+## Adding the letters
+
+Everything she reads lives in [`data/memories.ts`](data/memories.ts): one entry per flower.
+
+```ts
+{
+  id: "sad",                       // keep ids stable: they're how opened letters are remembered
+  flower: "lily",
+  label: "Open when you're sad",   // shown on the envelope and the flower's tag
+  message: `First paragraph.
+
+Second paragraph, after a blank line.`,
+  photo: { src: "/images/personal/us.jpg", alt: "Us at the beach" },  // optional
+  audio: { src: "/audio/personal/sad.m4a", title: "Listen to this" },  // optional
+},
+```
+
+- Write `message` between backticks. A blank line starts a new paragraph; a single line break stays as a line break.
+- Put photos in `public/images/personal/` and audio in `public/audio/personal/`. Both folders are gitignored, so those files never reach GitHub, which also means **a deploy from GitHub won't include them**. See "Deploying" below.
+- The "just because" letter (`flower: "final"`) stays locked as a bud until the other six have been opened.
+
+## Testing flags
+
+Add these to the URL:
+
+| Flag | What it does |
+| --- | --- |
+| `?skipintro` | Skip the opening line and go straight to the garden |
+| `?reset` | Forget which letters have been opened on this device (progress is saved in the browser) |
+| `?debug` | Show an FPS meter, for checking performance on a phone |
+
+Flags combine, e.g. `/?reset&skipintro`.
+
+## Performance
+
+The scene adapts to the device: it starts at a moderate resolution, and if the frame rate drops it lowers the resolution and halves the grass, wildflowers, fireflies and petals. Open the site with `?debug` on her kind of phone to check the frame rate.
+
+## Deploying
+
+The project deploys on Vercel from the `main` branch of the private GitHub repo; every push to `main` redeploys.
+
+Because photos and audio are gitignored, they won't be in a GitHub-based deploy. Options:
+
+1. Now that the repo is private, remove the two `public/*/personal` blocks from `.gitignore` and commit the media.
+2. Host the media elsewhere (e.g. Vercel Blob) and use full URLs in `data/memories.ts`.
+
+The site is public to anyone with its URL (it's hidden from search engines), so share the link only with her.
 
 ## Where things live
 
 | Path | What |
 | --- | --- |
 | `data/memories.ts` | Letter text, labels and optional photo/audio for each flower |
-| `public/images/personal/` | Letter photos (gitignored) |
-| `public/audio/personal/` | Letter audio (gitignored) |
-| `components/garden/` | 3D scene components |
-| `lib/gsap.ts` | GSAP setup; import `gsap`/`useGSAP` from here |
+| `lib/layout.ts` | Where each flower grows, and the stepping-stone path |
+| `lib/flowerSpecs.ts` | Petal shapes and colours for each flower |
+| `components/garden/` | The 3D scene: terrain, pond, flowers, camera, effects |
+| `components/ui/` | Intro, envelope and letter, progress row, flower tags |
+| `lib/gardenStore.ts` | Garden state: intro stage, open letter, which letters have been read |
