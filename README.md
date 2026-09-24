@@ -2,7 +2,7 @@
 
 An interactive 3D garden where each flower opens an "open when…" letter.
 
-Built with Next.js 14, TypeScript, Tailwind CSS, React Three Fiber + drei, GSAP and Framer Motion.
+Built with Next.js 15, React 19, TypeScript, Tailwind CSS, React Three Fiber + drei, GSAP and Framer Motion.
 
 ## Development
 
