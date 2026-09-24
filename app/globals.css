@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-night text-cream antialiased;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
