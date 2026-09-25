@@ -11,6 +11,7 @@ import FallingPetals from "./FallingPetals";
 import Fence from "./Fence";
 import Fireflies from "./Fireflies";
 import Flowers from "./Flowers";
+import Gardeners from "./Gardeners";
 import Grass from "./Grass";
 import Ground from "./Ground";
 import GrowthDriver from "./GrowthDriver";
@@ -60,6 +61,7 @@ export default function GardenCanvas() {
       <Wildflowers />
       <Flowers />
       <Plants />
+      <Gardeners />
       <Fireflies />
       <FallingPetals />
       <CameraRig />

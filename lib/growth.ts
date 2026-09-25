@@ -27,22 +27,38 @@ export const SATURATION_GLSL = /* glsl */ `
  * inside `near`), so orbiting never clips through a tree. It drops a growing share
  * of pixels in a fine dither pattern rather than blending, so nothing needs sorting.
  * Apply after withGrowth.
+ *
+ * Pass `center` to fade a figure built from many meshes as one, around a single
+ * world-space point that the caller keeps up to date.
  */
-export function withCameraFade<T extends THREE.Material>(material: T, near: number, far: number): T {
+export function withCameraFade<T extends THREE.Material>(
+  material: T,
+  near: number,
+  far: number,
+  center?: { value: THREE.Vector3 },
+): T {
   const previousPatch = material.onBeforeCompile.bind(material);
   const previousKey = material.customProgramCacheKey();
   material.onBeforeCompile = (shader, renderer) => {
     previousPatch(shader, renderer);
+    if (center) shader.uniforms.uFadeCenter = center;
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying float vCameraFade;")
+      .replace(
+        "#include <common>",
+        `#include <common>\nvarying float vCameraFade;${center ? "\nuniform vec3 uFadeCenter;" : ""}`,
+      )
       .replace(
         "#include <project_vertex>",
         `#include <project_vertex>
-        #ifdef USE_INSTANCING
+        ${
+          center
+            ? "vec3 fadeCenter = uFadeCenter;"
+            : `#ifdef USE_INSTANCING
           vec3 fadeCenter = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         #else
           vec3 fadeCenter = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-        #endif
+        #endif`
+        }
         vCameraFade = smoothstep(${near.toFixed(2)}, ${far.toFixed(2)}, distance(fadeCenter.xz, cameraPosition.xz));`,
       );
     shader.fragmentShader = shader.fragmentShader
@@ -54,7 +70,7 @@ export function withCameraFade<T extends THREE.Material>(material: T, near: numb
       );
   };
   // Keep this program apart from materials that share the base patch but not the fade.
-  material.customProgramCacheKey = () => `${previousKey}|camera-fade:${near}:${far}`;
+  material.customProgramCacheKey = () => `${previousKey}|camera-fade:${near}:${far}${center ? ":shared" : ""}`;
   return material;
 }
 
