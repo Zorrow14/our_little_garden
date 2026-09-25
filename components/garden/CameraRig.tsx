@@ -1,14 +1,16 @@
 "use client";
 
 import { OrbitControls } from "@react-three/drei";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useReducedMotion } from "framer-motion";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { FINAL_ID, useGardenStore } from "@/lib/gardenStore";
 import { gsap } from "@/lib/gsap";
 import { flowerAnchors } from "@/lib/layout";
+import { GATE, INTRO_SHOTS, PROCESSION_LENGTH, procession } from "@/lib/procession";
+import { groundHeight } from "@/lib/terrain";
 
 interface Pose {
   position: THREE.Vector3;
@@ -37,6 +39,16 @@ function gardenPose(aspect: number): Pose {
   return { position: GARDEN_POSE.target.clone().add(offset), target: GARDEN_POSE.target.clone() };
 }
 
+/** An intro shot, backed off along its line of sight on tall phone screens (less than the garden view: it's framing something small). */
+function introShot(position: THREE.Vector3, target: THREE.Vector3, aspect: number): Pose {
+  const offset = position.clone().sub(target).multiplyScalar(THREE.MathUtils.lerp(1, portraitPull(aspect), 0.55));
+  return { position: target.clone().add(offset), target: target.clone() };
+}
+
+/** Where the camera looks while trailing the gardeners: their heads, and the gate as they reach it. */
+const LOOK_ABOVE_FEET = new THREE.Vector3(0, 0.75, 0);
+const GATE_TARGET = new THREE.Vector3(GATE.x, groundHeight(GATE.x, GATE.z) + 0.75, GATE.z);
+
 /** A viewpoint on the same side as `from`, looking at `anchor` from a little above. */
 function focusPose(anchor: THREE.Vector3, from: THREE.Vector3, distance: number, height: number): Pose {
   const direction = from.clone().sub(anchor).setY(0);
@@ -62,6 +74,9 @@ export default function CameraRig() {
   /** Where the camera was before it flew to a flower, so closing the letter can return there. */
   const beforeFocus = useRef<Pose | null>(null);
   const flight = useRef<gsap.core.Timeline | null>(null);
+  const introPhase = useRef<"reveal" | "follow" | "settle" | "done">("done");
+  const focus = useMemo(() => new THREE.Vector3(), []);
+  const wanted = useMemo(() => new THREE.Vector3(), []);
 
   /** Glide camera and orbit target together; the controls are paused for the flight. */
   const flyTo = (pose: Pose, duration: number, onArrive?: () => void) => {
@@ -101,16 +116,68 @@ export default function CameraRig() {
     };
   }, [camera]);
 
-  // The intro cinematic: a slow descent from the sky down to the pond.
-  useEffect(() => {
-    if (stage !== "entering") return;
-    flyTo(gardenPose(aspectRef.current), 6.5, () => {
+  /** Glide over the garden, then hand the camera to her. */
+  const settle = (duration: number) => {
+    introPhase.current = "settle";
+    flyTo(gardenPose(aspectRef.current), duration, () => {
+      introPhase.current = "done";
       useGardenStore.getState().finishEntering();
       release();
     });
-    // flyTo only reads refs and stable values.
+  };
+
+  // The intro cinematic: down from the sky to the cottage, whose door opens for the gardeners.
+  // The walk to the gate is followed frame by frame below.
+  useEffect(() => {
+    if (stage !== "entering") return;
+    if (reducedMotion) {
+      useGardenStore.getState().skipIntro();
+      settle(0);
+      return;
+    }
+    introPhase.current = "reveal";
+    flyTo(introShot(INTRO_SHOTS.reveal.position, INTRO_SHOTS.reveal.target, aspectRef.current), 4.2, () => {
+      introPhase.current = "follow";
+    });
+    const knock = gsap.delayedCall(3.6, () => {
+      procession.doorWanted = true;
+    });
+    return () => {
+      knock.kill();
+    };
+    // flyTo and settle only read refs and stable values.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
+
+  useFrame((_, delta) => {
+    const phase = introPhase.current;
+    if (phase !== "reveal" && phase !== "follow") return;
+    if (useGardenStore.getState().introSkipped) {
+      settle(1.2);
+      return;
+    }
+    if (phase !== "follow") return;
+
+    const walkers = [...procession.walkers.values()];
+    if (walkers.length === 0) return;
+    const c = controls.current;
+    const aspect = aspectRef.current;
+    // Keep the pair in frame, drifting from the doorway shot to trail just behind them at the gate.
+    focus.set(0, 0, 0);
+    walkers.forEach((w) => focus.add(w.position));
+    focus.divideScalar(walkers.length).add(LOOK_ABOVE_FEET);
+    const progress = Math.min(...walkers.map((w) => w.s)) / PROCESSION_LENGTH;
+    const drift = THREE.MathUtils.smoothstep(progress, 0.15, 0.95);
+    const from = introShot(INTRO_SHOTS.reveal.position, INTRO_SHOTS.reveal.target, aspect).position;
+    const to = introShot(INTRO_SHOTS.trail, GATE_TARGET, aspect).position;
+    wanted.lerpVectors(from, to, drift);
+    camera.position.lerp(wanted, 1 - Math.exp(-2.5 * delta));
+    c.target.lerp(focus, 1 - Math.exp(-3 * delta));
+    camera.lookAt(c.target);
+
+    // Both through the gate and wandering: rise over the garden and let her explore.
+    if (walkers.every((w) => w.done)) settle(2.6);
+  });
 
   // Fly to a flower when its letter opens, back when it closes, and to the final bloom when it unlocks.
   useEffect(() => {

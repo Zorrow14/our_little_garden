@@ -19,6 +19,8 @@ interface GardenState {
   /** A letter read for the first time whose flower waits to bloom until the letter is closed. */
   pendingBloom: string | null;
   stage: Stage;
+  /** Set when the intro's walk from the cottage is skipped: everyone cuts straight to the garden. */
+  introSkipped: boolean;
   sceneReady: boolean;
   hoveredId: string | null;
   activeId: string | null;
@@ -31,6 +33,7 @@ interface GardenState {
   setSceneReady: () => void;
   enter: () => void;
   finishEntering: () => void;
+  skipIntro: () => void;
   hover: (id: string) => void;
   unhover: (id: string) => void;
   selectFlower: (id: string) => void;
@@ -94,6 +97,7 @@ export const useGardenStore = create<GardenState>()(
       opened: [],
       pendingBloom: null,
       stage: "intro",
+      introSkipped: false,
       sceneReady: false,
       hoveredId: null,
       activeId: null,
@@ -105,6 +109,7 @@ export const useGardenStore = create<GardenState>()(
       setSceneReady: () => set({ sceneReady: true }),
       enter: () => set((s) => (s.stage === "intro" ? { stage: "entering" } : {})),
       finishEntering: () => set({ stage: "garden" }),
+      skipIntro: () => set((s) => (s.stage === "entering" ? { introSkipped: true } : {})),
 
       hover: (id) => set({ hoveredId: id }),
       unhover: (id) => set((s) => (s.hoveredId === id ? { hoveredId: null } : {})),

@@ -87,5 +87,6 @@ The site is public to anyone with its URL (it's hidden from search engines), so 
 | `lib/gardenStore.ts` | Garden state: intro stage, open letter, which letters have been read |
 | `lib/plants.ts`, `lib/plantStore.ts` | The shared garden: Supabase reads, uploads, realtime, passcode, where new plants grow |
 | `components/garden/Fence.tsx` | The fence and gate around the garden |
-| `components/garden/Gardeners.tsx` | Zorrow and Skelly: their looks, pace, wandering, tending and the wave when tapped |
+| `components/garden/Gardeners.tsx` | Zorrow and Skelly: their looks, pace, wandering, tending and the wave when tapped, and their walk in from the cottage |
+| `components/garden/Cottage.tsx`, `lib/procession.ts` | The cottage outside the gate, its path, and the intro's walk and camera shots (runs after "Enter the garden"; there's a Skip intro link) |
 | `components/garden/GardenerBody.tsx`, `lib/wander.ts` | How the gardeners are built from simple shapes, and where they're allowed to walk |

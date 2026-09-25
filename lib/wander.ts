@@ -25,24 +25,34 @@ const LETTER_FLOWERS: Point[] = Object.entries(FLOWER_SPOTS)
   .filter(([kind]) => kind !== "lotus")
   .map(([, spot]) => ({ x: spot.x, z: spot.z }));
 
-export function isWalkable(x: number, z: number, plants: Point[]) {
-  if (Math.hypot(x - FENCE.x, z - FENCE.z) > ROAM_RADIUS) return false;
+function inRoamingArea(x: number, z: number) {
+  return Math.hypot(x - FENCE.x, z - FENCE.z) <= ROAM_RADIUS;
+}
+
+/** Clear of the pond, the flowers and the planted flowers. */
+function isOpenGround(x: number, z: number, plants: Point[]) {
   if (distanceToPond(x, z) < POND_CLEARANCE || distanceToFlowers(x, z) < FLOWER_CLEARANCE) return false;
   return plants.every((p) => Math.hypot(p.x - x, p.z - z) >= PLANT_CLEARANCE);
+}
+
+export function isWalkable(x: number, z: number, plants: Point[]) {
+  return inRoamingArea(x, z) && isOpenGround(x, z, plants);
 }
 
 /**
  * Whether a straight walk from `a` to `b` stays on walkable ground and clear of
  * `blockers`. The first stretch is skipped, so a gardener a flower sprang up
- * beside can still step away.
+ * beside can still step away, and one who has just come in through the gate
+ * (outside the roaming area) may cross its edge on the way in.
  */
 export function isClearWalk(a: Point, b: Point, plants: Point[], blockers: Point[] = []) {
   const length = Math.hypot(b.x - a.x, b.z - a.z);
+  const startsInside = inRoamingArea(a.x, a.z);
   for (let d = Math.min(0.5, length); d <= length; d += 0.2) {
     const t = d / length;
     const x = a.x + (b.x - a.x) * t;
     const z = a.z + (b.z - a.z) * t;
-    if (!isWalkable(x, z, plants)) return false;
+    if (!isOpenGround(x, z, plants) || (startsInside && !inRoamingArea(x, z))) return false;
     if (blockers.some((o) => Math.hypot(o.x - x, o.z - z) < PASSING_ROOM)) return false;
   }
   return isWalkable(b.x, b.z, plants);

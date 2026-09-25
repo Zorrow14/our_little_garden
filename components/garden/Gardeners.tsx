@@ -8,6 +8,7 @@ import * as THREE from "three";
 import FlowerTag from "@/components/ui/FlowerTag";
 import { useGardenStore } from "@/lib/gardenStore";
 import { usePlantStore } from "@/lib/plantStore";
+import { OFF_DOORSTEP, onProcession, PROCESSION_LENGTH, procession } from "@/lib/procession";
 import { createRandom, groundHeight } from "@/lib/terrain";
 import { getGlowTexture } from "@/lib/textures";
 import { landPlants, nearestWalkable, planWander, type Point } from "@/lib/wander";
@@ -19,7 +20,14 @@ interface GardenerProfile {
   /** Shown under the name on the hover tag. */
   note: string;
   look: GardenerLook;
+  /** Where they first appear when the garden opens without the intro. */
   start: Point;
+  /**
+   * The intro walk out of the cottage: how far along the path they start (the
+   * one further along leads through the door), and which side of the path they
+   * take once they're walking side by side (positive is to the right).
+   */
+  intro: { head: number; side: number };
   /** Walking pace in units per second, and the distance covered by one step. */
   speed: number;
   stride: number;
@@ -44,6 +52,7 @@ const CREW: GardenerProfile[] = [
       watch: true,
     },
     start: { x: -5.4, z: 3.6 },
+    intro: { head: 0, side: 0.27 },
     speed: 0.6,
     stride: 0.34,
     seed: 3,
@@ -65,6 +74,7 @@ const CREW: GardenerProfile[] = [
       blush: true,
     },
     start: { x: 4.6, z: -2.2 },
+    intro: { head: 0.5, side: -0.27 },
     speed: 0.5,
     stride: 0.28,
     seed: 9,
@@ -89,11 +99,26 @@ export default function Gardeners() {
   ));
 }
 
-type Mode = "idle" | "walk" | "greet";
+/**
+ * Each gardener's state machine. The intro runs once: `waiting` inside the
+ * cottage until the door opens, then `intro-walk` along the scripted path to
+ * just inside the gate. From there they wander for good: `idle` and `walk`
+ * between random spots, and `greet` when tapped.
+ */
+type Mode = "waiting" | "intro-walk" | "idle" | "walk" | "greet";
+
+/** Pace of the walk in from the cottage: an unhurried stroll, a little brisker than wandering. */
+const INTRO_PACE = 0.7;
+/** How far behind the leader the other follows through the doorway. */
+const SINGLE_FILE_GAP = 0.5;
 
 interface Walker {
   mode: Mode;
   pos: Point;
+  /** Height of the feet: the ground, or the cottage floor while indoors. */
+  y: number;
+  /** Distance along the intro walk. */
+  s: number;
   yaw: number;
   target: Point | null;
   /** The flower being walked to or tended, if any. */
@@ -145,13 +170,20 @@ function Gardener({
   const [greetings, setGreetings] = useState(0);
   useCursor(hovered && interactive);
 
-  const [walker] = useState<Walker>(() => ({
-    mode: "idle",
-    pos: nearestWalkable(profile.start, []),
-    yaw: rand() * Math.PI * 2,
-    target: null,
-    tend: null,
-    timer: 0.5 + rand() * 2,
+  const [walker] = useState<Walker>(() => {
+    // Straight into the garden (e.g. ?skipintro): start wandering from their usual spots.
+    const intro = useGardenStore.getState().stage !== "garden";
+    const inside = onProcession(profile.intro.head, 0);
+    const start = nearestWalkable(profile.start, []);
+    return {
+      mode: intro ? "waiting" : "idle",
+      pos: intro ? { x: inside.x, z: inside.z } : start,
+      y: intro ? inside.y : groundHeight(start.x, start.z),
+      s: profile.intro.head,
+      yaw: intro ? inside.heading : rand() * Math.PI * 2,
+      target: null,
+      tend: null,
+      timer: 0.5 + rand() * 2,
     waited: 0,
     phase: 0,
     moving: 0,
@@ -160,8 +192,9 @@ function Gardener({
     greetTime: 0,
     look: 0,
     lookTarget: 0,
-    lookTimer: 0,
-  }));
+      lookTimer: 0,
+    };
+  });
 
   // Which arm is free to wave, swing and reach: the one not carrying anything. The character's left is +x.
   const carriesLeft = look.carry === "basket";
@@ -176,7 +209,47 @@ function Gardener({
     let pace = 0;
     let facing: number | null = null;
 
-    if (w.mode === "greet") {
+    /** Hand over from the scripted walk to wandering, keeping position and heading so nothing snaps. */
+    const beginWandering = (pause: number) => {
+      w.mode = "idle";
+      w.timer = pause;
+      w.target = null;
+      w.tend = null;
+      procession.walkers.set(id, { position: new THREE.Vector3(w.pos.x, w.y, w.pos.z), s: w.s, done: true });
+    };
+
+    if (w.mode === "waiting" || w.mode === "intro-walk") {
+      const { stage, introSkipped } = useGardenStore.getState();
+      if (introSkipped || stage === "garden") {
+        // Skipped: appear just inside the gate. Opened straight into the garden: their usual spot.
+        const cameThrough = introSkipped || procession.door > 0;
+        const end = onProcession(PROCESSION_LENGTH, profile.intro.side);
+        w.pos = cameThrough ? { x: end.x, z: end.z } : nearestWalkable(profile.start, []);
+        if (cameThrough) w.yaw = end.heading;
+        w.s = PROCESSION_LENGTH;
+        beginWandering(0.4 + rand() * 0.8);
+      }
+    }
+
+    if (w.mode === "waiting") {
+      // Indoors, until the door is most of the way open.
+      if (procession.door > 0.8) w.mode = "intro-walk";
+    } else if (w.mode === "intro-walk") {
+      // Single file through the doorway, then side by side: whoever's out of step hurries or eases off.
+      const partner = [...procession.walkers].find(([key]) => key !== id)?.[1];
+      const leads = profile.intro.head > 0;
+      const bothOut = partner ? Math.min(w.s, partner.s) > OFF_DOORSTEP + 0.4 : true;
+      const wantedLead = bothOut ? 0 : leads ? -SINGLE_FILE_GAP : SINGLE_FILE_GAP;
+      const lead = partner ? partner.s - w.s : wantedLead;
+      pace = INTRO_PACE * THREE.MathUtils.clamp(1 + (lead - wantedLead) * 0.9, 0.7, 1.4);
+      w.s = Math.min(w.s + pace * dt, PROCESSION_LENGTH);
+      const side = profile.intro.side * THREE.MathUtils.smoothstep(w.s, OFF_DOORSTEP, OFF_DOORSTEP + 1.2);
+      const here = onProcession(w.s, side);
+      w.pos = { x: here.x, z: here.z };
+      w.y = here.y;
+      facing = here.heading;
+      if (w.s >= PROCESSION_LENGTH) beginWandering(0.3 + rand() * 0.6);
+    } else if (w.mode === "greet") {
       w.timer -= dt;
       w.greetTime += dt;
       facing = Math.atan2(state.camera.position.x - w.pos.x, state.camera.position.z - w.pos.z);
@@ -241,8 +314,14 @@ function Gardener({
       }
     }
     whereabouts.set(id, { pos: w.pos, target: w.target });
+    if (w.mode === "waiting" || w.mode === "intro-walk") {
+      procession.walkers.set(id, { position: new THREE.Vector3(w.pos.x, w.y, w.pos.z), s: w.s, done: false });
+    } else {
+      w.y = groundHeight(w.pos.x, w.pos.z);
+    }
 
-    if (facing !== null) w.yaw += shortestTurn(w.yaw, facing) * (1 - Math.exp(-(w.mode === "walk" ? 6 : 3.5) * dt));
+    const turnRate = w.mode === "intro-walk" ? 8 : w.mode === "walk" ? 6 : 3.5;
+    if (facing !== null) w.yaw += shortestTurn(w.yaw, facing) * (1 - Math.exp(-turnRate * dt));
 
     // Blend between poses.
     w.moving = damp(w.moving, pace > 0.01 ? 1 : 0, 8, dt);
@@ -258,13 +337,14 @@ function Gardener({
       w.lookTarget = w.mode === "idle" && !w.tend ? (rand() - 0.5) * 1.3 : 0;
       w.lookTimer = 1.2 + rand() * 2.5;
     }
-    w.look = damp(w.look, w.mode === "walk" ? 0 : w.lookTarget, 3, dt);
+    w.look = damp(w.look, w.mode === "walk" || w.mode === "intro-walk" ? 0 : w.lookTarget, 3, dt);
 
     const hop = w.mode === "greet" && w.greetTime < 0.9 ? Math.abs(Math.sin((w.greetTime / 0.45) * Math.PI)) * 0.13 : 0;
-    const y = groundHeight(w.pos.x, w.pos.z);
-    root.current.position.set(w.pos.x, y, w.pos.z);
+    root.current.position.set(w.pos.x, w.y, w.pos.z);
     root.current.rotation.y = w.yaw;
-    fadeCenter.value.set(w.pos.x, y + 0.6, w.pos.z);
+    // Out of sight in the cottage until the door opens.
+    root.current.visible = w.mode !== "waiting" || procession.door > 0.05;
+    fadeCenter.value.set(w.pos.x, w.y + 0.6, w.pos.z);
 
     if (!rig.bounce) return;
     rig.bounce.position.y = Math.abs(Math.sin(w.phase)) * 0.035 * w.moving + hop;

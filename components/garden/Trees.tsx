@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { withCameraFade, withGrowth } from "@/lib/growth";
+import { COTTAGE, DOOR, INTRO_SHOTS, PROCESSION } from "@/lib/procession";
 import { createRandom, groundHeight } from "@/lib/terrain";
 
 interface Tree {
@@ -21,6 +22,15 @@ const TREE_COUNT = 44;
 const RING_INNER = 17;
 const RING_DEPTH = 8;
 
+/** Keeps trees off the cottage, its path, and the intro's view of the door. */
+function inClearing(x: number, z: number) {
+  if (Math.hypot(x - COTTAGE.x, z - COTTAGE.z) < 4) return true;
+  if (PROCESSION.getSpacedPoints(60).some((p) => Math.hypot(p.x - x, p.z - z) < 1.8)) return true;
+  const view = INTRO_SHOTS.reveal.position;
+  const line = new THREE.Line3(new THREE.Vector3(view.x, 0, view.z), new THREE.Vector3(DOOR.x, 0, DOOR.z));
+  return line.closestPointToPoint(new THREE.Vector3(x, 0, z), true, new THREE.Vector3()).distanceTo(new THREE.Vector3(x, 0, z)) < 1.8;
+}
+
 const CANOPY_COLORS = ["#1e4a38", "#245240", "#1b4034", "#2d5b44", "#20463f"].map((c) => new THREE.Color(c));
 
 export default function Trees() {
@@ -30,7 +40,7 @@ export default function Trees() {
       const a = ((i + rand() * 0.8) / TREE_COUNT) * Math.PI * 2;
       const r = RING_INNER + rand() * RING_DEPTH;
       return { x: Math.cos(a) * r, z: Math.sin(a) * r, scale: 1.2 + rand() * 1, lean: (rand() - 0.5) * 0.12 };
-    });
+    }).filter((t) => !inClearing(t.x, t.z));
   }, []);
 
   // Each canopy is a cluster of three or four low-poly blobs.

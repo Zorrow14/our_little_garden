@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import * as THREE from "three";
 import { useGardenStore } from "@/lib/gardenStore";
 import CameraRig from "./CameraRig";
+import Cottage from "./Cottage";
 import DebugInfo from "./DebugInfo";
 import FallingPetals from "./FallingPetals";
 import Fence from "./Fence";
@@ -61,6 +62,7 @@ export default function GardenCanvas() {
       <Wildflowers />
       <Flowers />
       <Plants />
+      <Cottage />
       <Gardeners />
       <Fireflies />
       <FallingPetals />
