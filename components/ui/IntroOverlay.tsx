@@ -3,6 +3,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 import { type Stage, useGardenStore } from "@/lib/gardenStore";
+import { startMusic } from "@/lib/music";
 
 // Revealed left to right like ink going down; the negative insets leave room for the script's flourishes.
 // Hidden must clip past the left overhang too, or a sliver of each line's first letter shows early.
@@ -69,7 +70,11 @@ export default function IntroOverlay() {
               >
                 <button
                   type="button"
-                  onClick={enter}
+                  onClick={() => {
+                    // The music has to start inside the click itself, or the browser blocks it.
+                    startMusic();
+                    enter();
+                  }}
                   disabled={!written || !sceneReady}
                   className="px-6 py-3 text-[1.05rem] tracking-wide text-moon underline decoration-moon/35 underline-offset-[10px] transition-colors hover:decoration-lantern focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lantern disabled:cursor-default disabled:no-underline"
                 >

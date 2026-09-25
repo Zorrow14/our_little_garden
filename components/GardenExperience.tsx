@@ -6,8 +6,10 @@ import { useEffect } from "react";
 import GardenHud from "@/components/ui/GardenHud";
 import IntroOverlay from "@/components/ui/IntroOverlay";
 import LetterModal from "@/components/ui/LetterModal";
+import MusicControl from "@/components/ui/MusicControl";
 import PlantPanel from "@/components/ui/PlantPanel";
 import { STORAGE_KEY, useGardenStore } from "@/lib/gardenStore";
+import { startMusic } from "@/lib/music";
 import { startPlantSync } from "@/lib/plantStore";
 
 // three.js needs window/WebGL, so the canvas only renders in the browser.
@@ -40,6 +42,15 @@ export default function GardenExperience() {
   useEffect(() => {
     applyUrlFlags();
     void useGardenStore.persist.rehydrate();
+    // With ?skipintro there's no "Enter the garden" click, so the music waits for her first tap or key press.
+    if (useGardenStore.getState().stage !== "garden") return;
+    const begin = () => startMusic();
+    window.addEventListener("pointerdown", begin, { once: true });
+    window.addEventListener("keydown", begin, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", begin);
+      window.removeEventListener("keydown", begin);
+    };
   }, []);
 
   // The shared garden: load what's been planted and watch for new plants.
@@ -53,6 +64,7 @@ export default function GardenExperience() {
         </div>
         <GardenHud />
         <PlantPanel />
+        <MusicControl />
         <LetterModal />
         <IntroOverlay />
       </main>

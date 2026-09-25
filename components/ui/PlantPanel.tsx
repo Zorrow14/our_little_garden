@@ -5,6 +5,7 @@ import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } fr
 import { FLOWER_SPECS } from "@/lib/flowerSpecs";
 import { useGardenStore } from "@/lib/gardenStore";
 import { plantLetter, planting, usePlantStore } from "@/lib/plantStore";
+import { useMusic } from "@/lib/music";
 import { checkPasscode, PLANT_KINDS, type PlantKind } from "@/lib/plants";
 
 /** Matches the storage bucket's limit. */
@@ -24,6 +25,8 @@ export default function PlantPanel() {
   const visible = useGardenStore((s) => s.hydrated && s.stage === "garden" && !s.activeId && !s.celebrating);
   const formOpen = usePlantStore((s) => s.formOpen);
   const openForm = usePlantStore((s) => s.openForm);
+  // Sits just left of the music button when that's showing.
+  const beside = useMusic((s) => s.started && s.available);
 
   return (
     <>
@@ -33,7 +36,7 @@ export default function PlantPanel() {
             key="plant-button"
             type="button"
             onClick={openForm}
-            className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-30 flex items-center gap-2 rounded-full bg-night/55 py-2 pl-3 pr-4 text-[0.9rem] text-moon/90 ring-1 ring-moon/20 backdrop-blur-sm transition-colors hover:bg-night/75 hover:text-moon focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lantern"
+            className={`absolute ${beside ? "right-[4.25rem]" : "right-4"} top-[max(1rem,env(safe-area-inset-top))] z-30 flex items-center gap-2 rounded-full bg-night/55 py-2 pl-3 pr-4 text-[0.9rem] text-moon/90 ring-1 ring-moon/20 backdrop-blur-sm transition-colors hover:bg-night/75 hover:text-moon focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lantern`}
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}

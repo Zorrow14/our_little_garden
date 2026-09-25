@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { type Memory, memories } from "@/data/memories";
 import { useGardenStore } from "@/lib/gardenStore";
+import { duckMusic } from "@/lib/music";
 import { usePlantStore } from "@/lib/plantStore";
 import { type Plant, plantKind } from "@/lib/plants";
 import FlowerGlyph from "./FlowerGlyph";
@@ -265,11 +266,23 @@ function VoiceNote({ src, title }: { src: string; title?: string }) {
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  /** Restores the background music; set while this voice note is playing. */
+  const unduck = useRef<(() => void) | null>(null);
+  const quietMusic = () => {
+    unduck.current ??= duckMusic();
+  };
+  const restoreMusic = () => {
+    unduck.current?.();
+    unduck.current = null;
+  };
 
-  // Removing an <audio> element doesn't reliably stop it, so pause on close.
+  // Removing an <audio> element doesn't reliably stop it, so pause on close, and bring the music back up.
   useEffect(() => {
     const element = audio.current;
-    return () => element?.pause();
+    return () => {
+      element?.pause();
+      restoreMusic();
+    };
   }, []);
 
   const toggle = () => {
@@ -302,10 +315,17 @@ function VoiceNote({ src, title }: { src: string; title?: string }) {
         ref={audio}
         src={src}
         preload="metadata"
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+        onPlay={() => {
+          setPlaying(true);
+          quietMusic();
+        }}
+        onPause={() => {
+          setPlaying(false);
+          restoreMusic();
+        }}
         onEnded={() => {
           setPlaying(false);
+          restoreMusic();
           setProgress(0);
         }}
         onTimeUpdate={(e) => {
