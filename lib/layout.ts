@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { FlowerKind } from "@/data/memories";
+import type { FlowerType } from "@/lib/flowerSpecs";
 
 export interface FlowerSpot {
   x: number;
@@ -10,11 +10,16 @@ export interface FlowerSpot {
 }
 
 /**
- * Where each flower grows. The lotus floats in the pond right in front of the
- * camera so it's the first one she finds; the lily is the largest, on the near bank.
- * The final bloom waits at the far end of the path.
+ * What's pre-placed in the garden on load, and where: one flower per original
+ * letter. This is deliberately its own list, not the flower registry: the
+ * registry (FLOWER_REGISTRY) knows every flower type, most of which only
+ * appear once someone plants one.
+ *
+ * The lotus floats in the pond right in front of the camera so it's the first
+ * one she finds; the lily is the largest, on the near bank. The final bloom
+ * waits at the far end of the path.
  */
-export const FLOWER_SPOTS: Record<FlowerKind, FlowerSpot> = {
+export const FLOWER_SPOTS = {
   lotus: { x: 0.35, z: 2.0, scale: 1.25, facing: 0 },
   lily: { x: -2.75, z: 0.8, scale: 1.45, facing: 0.2 },
   tulip: { x: 3.1, z: -0.4, scale: 1.2, facing: -0.2 },
@@ -22,7 +27,10 @@ export const FLOWER_SPOTS: Record<FlowerKind, FlowerSpot> = {
   daisy: { x: 2.8, z: -4.1, scale: 1.3, facing: -0.15 },
   orchid: { x: -0.6, z: -5.4, scale: 1.25, facing: 0.1 },
   final: { x: 0.7, z: -8.7, scale: 1.7, facing: 0 },
-};
+} satisfies Partial<Record<FlowerType, FlowerSpot>>;
+
+/** The flower types pre-placed in the garden: a subset of the registry. */
+export type PrePlacedFlower = keyof typeof FLOWER_SPOTS;
 
 /** World-space point just above each flower head, filled in as flowers mount. */
 export const flowerAnchors = new Map<string, THREE.Vector3>();
@@ -58,7 +66,7 @@ export function distanceToPath(x: number, z: number) {
 
 export function distanceToFlowers(x: number, z: number) {
   let min = Infinity;
-  for (const spot of Object.values(FLOWER_SPOTS)) min = Math.min(min, Math.hypot(spot.x - x, spot.z - z));
+  for (const spot of Object.values<FlowerSpot>(FLOWER_SPOTS)) min = Math.min(min, Math.hypot(spot.x - x, spot.z - z));
   return min;
 }
 

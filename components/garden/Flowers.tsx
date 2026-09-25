@@ -5,13 +5,13 @@ import * as THREE from "three";
 import FlowerTag from "@/components/ui/FlowerTag";
 import { memories } from "@/data/memories";
 import { bloomedIds, FINAL_ID, isFinalUnlocked, useGardenStore } from "@/lib/gardenStore";
-import { FLOWER_SPECS } from "@/lib/flowerSpecs";
+import { FLOWER_REGISTRY } from "@/lib/flowerSpecs";
 import { FLOWER_SPOTS, flowerAnchors } from "@/lib/layout";
 import { groundHeight, WATER_Y } from "@/lib/terrain";
 import Flower, { type FlowerStatus } from "./Flower";
 
 const placements = memories.map((memory) => {
-  const spec = FLOWER_SPECS[memory.flower];
+  const spec = FLOWER_REGISTRY[memory.flower].spec;
   const spot = FLOWER_SPOTS[memory.flower];
   const y = spec.stemHeight === 0 ? WATER_Y : groundHeight(spot.x, spot.z);
   return {

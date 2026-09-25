@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { FlowerKind } from "@/data/memories";
+import { FLOWER_REGISTRY, FLOWER_TYPES, type FlowerType } from "@/lib/flowerSpecs";
 import { distanceToFlowers, distanceToPath, FENCE, FLOWER_SPOTS } from "@/lib/layout";
 import { MEDIA_BUCKET, supabase } from "@/lib/supabase";
 import { distanceToPond, groundHeight, hashString, POND, WATER_Y } from "@/lib/terrain";
@@ -21,14 +21,16 @@ export interface Plant {
 
 export type NewPlant = Pick<Plant, "flower_type" | "category_label" | "message" | "planted_by">;
 
-/** Flowers you can plant. The moon lotus stays reserved for the last of the original letters. */
-export const PLANT_KINDS = ["lotus", "lily", "tulip", "rose", "daisy", "orchid"] as const satisfies readonly FlowerKind[];
-export type PlantKind = (typeof PLANT_KINDS)[number];
+/**
+ * The planting form's choices: every registry flower marked plantable, whether
+ * or not it's pre-placed. (The moon lotus is reserved for the last original letter.)
+ */
+export const PLANT_KINDS: FlowerType[] = FLOWER_TYPES.filter((type) => FLOWER_REGISTRY[type].plantable);
 
 /** The flower to draw for a stored type. Anything unfamiliar still gets a flower, picked by its name. */
-export function plantKind(type: string): PlantKind {
+export function plantKind(type: string): FlowerType {
   const t = type.trim().toLowerCase();
-  return (PLANT_KINDS as readonly string[]).includes(t) ? (t as PlantKind) : PLANT_KINDS[hashString(t) % PLANT_KINDS.length];
+  return (PLANT_KINDS as string[]).includes(t) ? (t as FlowerType) : PLANT_KINDS[hashString(t) % PLANT_KINDS.length];
 }
 
 /**
@@ -76,7 +78,7 @@ function clearOfGarden({ x, z, water }: Candidate) {
  * A lotus floats on the pond while there's room there.
  */
 export function choosePlantSpot(
-  kind: PlantKind,
+  kind: FlowerType,
   taken: { x: number; z: number }[],
   camera: THREE.Camera | null,
 ): [number, number, number] {

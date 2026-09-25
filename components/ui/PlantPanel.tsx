@@ -2,11 +2,14 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
-import { FLOWER_SPECS } from "@/lib/flowerSpecs";
+import { FLOWER_REGISTRY, type FlowerType } from "@/lib/flowerSpecs";
 import { useGardenStore } from "@/lib/gardenStore";
 import { plantLetter, planting, usePlantStore } from "@/lib/plantStore";
 import { useMusic } from "@/lib/music";
-import { checkPasscode, PLANT_KINDS, type PlantKind } from "@/lib/plants";
+import { checkPasscode, PLANT_KINDS } from "@/lib/plants";
+
+/** What the label field starts as, before a flower's suggestion or her own words replace it. */
+const BLANK_LABEL = "Open when ";
 
 /** Matches the storage bucket's limit. */
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -70,7 +73,7 @@ function PlantDialog() {
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 pb-4 pt-[4.5rem] sm:p-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.35 } }}
@@ -170,8 +173,8 @@ function Gate({ titleId, onUnlock, onCancel }: { titleId: string; onUnlock: () =
 }
 
 function PlantForm({ titleId, onDone }: { titleId: string; onDone: () => void }) {
-  const [kind, setKind] = useState<PlantKind>("tulip");
-  const [label, setLabel] = useState("Open when ");
+  const [kind, setKind] = useState<FlowerType>("tulip");
+  const [label, setLabel] = useState(BLANK_LABEL);
   const [message, setMessage] = useState("");
   const [name, setName] = useState(planting.savedName);
   const [photo, setPhoto] = useState<File | null>(null);
@@ -179,6 +182,12 @@ function PlantForm({ titleId, onDone }: { titleId: string; onDone: () => void })
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const formId = useId();
+
+  // Each flower suggests its own "open when…", unless a label has already been written.
+  const pick = (next: FlowerType) => {
+    if (label === BLANK_LABEL || label === FLOWER_REGISTRY[kind].label) setLabel(FLOWER_REGISTRY[next].label);
+    setKind(next);
+  };
 
   const ready = label.trim().length > 0 && message.trim().length > 0 && name.trim().length > 0;
 
@@ -194,7 +203,7 @@ function PlantForm({ titleId, onDone }: { titleId: string; onDone: () => void })
         photo,
         audio,
       );
-      useGardenStore.setState({ notice: `Your ${kind} is growing in the garden.` });
+      useGardenStore.setState({ notice: `Your ${FLOWER_REGISTRY[kind].name.toLowerCase()} is growing in the garden.` });
       onDone();
     } catch (err) {
       console.error("Planting failed", err);
@@ -212,15 +221,15 @@ function PlantForm({ titleId, onDone }: { titleId: string; onDone: () => void })
 
       <fieldset className="mt-6" disabled={busy}>
         <legend className="text-[0.82rem] uppercase tracking-[0.12em] text-ink/60">Flower</legend>
-        <div className="mt-2.5 grid grid-cols-3 gap-2">
+        <div className="mt-2.5 grid grid-cols-2 gap-2 min-[400px]:grid-cols-3">
           {PLANT_KINDS.map((k) => (
             <label
               key={k}
-              className="relative flex cursor-pointer items-center justify-center gap-2 rounded-full border border-ink/15 bg-white/50 px-3 py-2 text-[0.95rem] capitalize transition-colors has-[:checked]:border-ink has-[:checked]:bg-ink has-[:checked]:text-paper has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-rose"
+              className="relative flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-ink/15 bg-white/50 px-2.5 py-2 text-[0.9rem] whitespace-nowrap transition-colors has-[:checked]:border-ink has-[:checked]:bg-ink has-[:checked]:text-paper has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-rose"
             >
-              <input type="radio" name={`${formId}-kind`} value={k} checked={kind === k} onChange={() => setKind(k)} className="sr-only" />
-              <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: FLOWER_SPECS[k].glow }} />
-              {k}
+              <input type="radio" name={`${formId}-kind`} value={k} checked={kind === k} onChange={() => pick(k)} className="sr-only" />
+              <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: FLOWER_REGISTRY[k].spec.glow }} />
+              {FLOWER_REGISTRY[k].name}
             </label>
           ))}
         </div>

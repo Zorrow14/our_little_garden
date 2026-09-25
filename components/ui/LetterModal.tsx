@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useAnimate, useReducedMotion } from "framer-mo
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { type Memory, memories } from "@/data/memories";
+import type { FlowerType } from "@/lib/flowerSpecs";
 import { useGardenStore } from "@/lib/gardenStore";
 import { duckMusic } from "@/lib/music";
 import { usePlantStore } from "@/lib/plantStore";
@@ -13,7 +14,7 @@ import FlowerGlyph from "./FlowerGlyph";
 type Stage = "sealed" | "opening" | "open";
 
 /** A letter to show: one of the original seven, or one planted in the shared garden (which is signed). */
-type Letter = Memory & { planted?: { by: string; on: string } };
+type Letter = Omit<Memory, "flower"> & { flower: FlowerType; planted?: { by: string; on: string } };
 
 function letterFromPlant(plant: Plant): Letter {
   return {
@@ -100,7 +101,7 @@ function Envelope({
   onOpen,
   onOpened,
 }: {
-  memory: Memory;
+  memory: Letter;
   opening: boolean;
   onOpen: () => void;
   onOpened: () => void;

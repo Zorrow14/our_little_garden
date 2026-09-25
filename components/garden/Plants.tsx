@@ -4,7 +4,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import FlowerTag from "@/components/ui/FlowerTag";
-import { FLOWER_SPECS } from "@/lib/flowerSpecs";
+import { FLOWER_REGISTRY } from "@/lib/flowerSpecs";
 import { useGardenStore } from "@/lib/gardenStore";
 import { flowerAnchors } from "@/lib/layout";
 import { plantView, usePlantStore } from "@/lib/plantStore";
@@ -73,7 +73,7 @@ function PlantFlower({
   onHoverEnd: (id: string) => void;
   onSelect: (id: string) => void;
 }) {
-  const spec = FLOWER_SPECS[plantKind(plant.flower_type)];
+  const spec = FLOWER_REGISTRY[plantKind(plant.flower_type)].spec;
   const position = useMemo<[number, number, number]>(
     () => [plant.position_x, plant.position_y, plant.position_z],
     [plant.position_x, plant.position_y, plant.position_z],

@@ -8,19 +8,13 @@
  * Write `message` as a backtick string; blank lines become paragraph breaks.
  */
 
-export type FlowerKind =
-  | "lotus"
-  | "lily"
-  | "tulip"
-  | "rose"
-  | "daisy"
-  | "orchid"
-  | "final";
+import type { PrePlacedFlower } from "@/lib/layout";
 
 export interface Memory {
   /** Stable id, also used to remember which letters have been opened. */
   id: string;
-  flower: FlowerKind;
+  /** One of the pre-placed flowers (FLOWER_SPOTS in lib/layout.ts). */
+  flower: PrePlacedFlower;
   /** Shown on hover, and before the envelope opens. */
   label: string;
   message: string;
