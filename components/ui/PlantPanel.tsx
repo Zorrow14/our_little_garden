@@ -15,6 +15,8 @@ const LABEL_IDEAS = [
   "Open when you're proud of yourself",
   "Open when you can't stop smiling",
   "Open when it's been a long day",
+  "Open when you need a hug",
+  "Open when you need a friend",
 ];
 
 /** The "Plant something" button, and the gate and form it opens. */
