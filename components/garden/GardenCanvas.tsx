@@ -8,6 +8,7 @@ import { useGardenStore } from "@/lib/gardenStore";
 import CameraRig from "./CameraRig";
 import DebugInfo from "./DebugInfo";
 import FallingPetals from "./FallingPetals";
+import Fence from "./Fence";
 import Fireflies from "./Fireflies";
 import Flowers from "./Flowers";
 import Grass from "./Grass";
@@ -15,6 +16,7 @@ import Ground from "./Ground";
 import GrowthDriver from "./GrowthDriver";
 import Lights from "./Lights";
 import Path from "./Path";
+import Plants from "./Plants";
 import Pond from "./Pond";
 import Rocks from "./Rocks";
 import Sky from "./Sky";
@@ -53,9 +55,11 @@ export default function GardenCanvas() {
       <Rocks />
       <Path />
       <Trees />
+      <Fence />
       <Grass />
       <Wildflowers />
       <Flowers />
+      <Plants />
       <Fireflies />
       <FallingPetals />
       <CameraRig />

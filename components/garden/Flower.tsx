@@ -30,7 +30,14 @@ interface FlowerProps {
   onSelect?: (id: string) => void;
   /** Shown above the flower head while it's hovered. */
   label?: ReactNode;
+  /** For planted flowers: 0 before it sprouts, 1 at full size. The stem rises first, then the head fills out. */
+  grow?: RefObject<number>;
 }
+
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+const easeOutCubic = (x: number) => 1 - (1 - x) ** 3;
+/** Overshoots a little before settling, like a bud springing open. */
+const easeOutBack = (x: number) => 1 + 2.2 * (x - 1) ** 3 + 1.2 * (x - 1) ** 2;
 
 function targetOpenness(spec: FlowerSpec, status: FlowerStatus) {
   if (status === "locked") return 0.04 + 0.32 * garden.growth;
@@ -57,6 +64,7 @@ export default function Flower({
   onHoverEnd,
   onSelect,
   label,
+  grow,
 }: FlowerProps) {
   const root = useRef<THREE.Group>(null!);
   const pool = useRef<THREE.Mesh>(null!);
@@ -131,7 +139,15 @@ export default function Flower({
     hover.current = THREE.MathUtils.damp(hover.current, hovered && interactive ? 1 : 0, 10, dt);
 
     const r = root.current;
-    r.scale.setScalar(scale * (1 + hover.current * 0.06));
+    const size = scale * (1 + hover.current * 0.06);
+    const g = grow ? grow.current : 1;
+    if (g >= 1) {
+      r.scale.setScalar(size);
+    } else {
+      const rise = easeOutCubic(clamp01(g * 1.4));
+      const fill = easeOutBack(clamp01((g - 0.15) / 0.85));
+      r.scale.set(size * Math.max(fill, 0.001), size * Math.max(rise, 0.001), size * Math.max(fill, 0.001));
+    }
 
     // Slowly turn toward the viewer, the way flowers follow the sun.
     const toCamera = Math.atan2(state.camera.position.x - position[0], state.camera.position.z - position[2]) + facing;

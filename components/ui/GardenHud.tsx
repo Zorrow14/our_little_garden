@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { type ReactNode, useEffect } from "react";
 import { memories } from "@/data/memories";
 import { bloomedLetterCount, FINAL_ID, LETTER_IDS, useGardenStore } from "@/lib/gardenStore";
+import { usePlantStore } from "@/lib/plantStore";
 import FlowerGlyph from "./FlowerGlyph";
 
 /** "Tap" on touch screens, "Click" with a mouse. */
@@ -99,6 +100,7 @@ export default function GardenHud() {
  */
 function LetterIndex({ finalUnlocked }: { finalUnlocked: boolean }) {
   const selectFlower = useGardenStore((s) => s.selectFlower);
+  const plants = usePlantStore((s) => s.plants);
   return (
     <nav
       aria-label="Letters"
@@ -119,6 +121,17 @@ function LetterIndex({ finalUnlocked }: { finalUnlocked: boolean }) {
             </li>
           );
         })}
+        {plants.map((p) => (
+          <li key={p.id}>
+            <button
+              type="button"
+              onClick={() => selectFlower(p.id)}
+              className="w-full rounded-sm px-3 py-1.5 text-left font-hand text-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose"
+            >
+              {p.category_label} <span className="font-serif text-sm text-ink/60">(planted by {p.planted_by})</span>
+            </button>
+          </li>
+        ))}
       </ul>
     </nav>
   );

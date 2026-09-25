@@ -6,7 +6,9 @@ import { useEffect } from "react";
 import GardenHud from "@/components/ui/GardenHud";
 import IntroOverlay from "@/components/ui/IntroOverlay";
 import LetterModal from "@/components/ui/LetterModal";
+import PlantPanel from "@/components/ui/PlantPanel";
 import { STORAGE_KEY, useGardenStore } from "@/lib/gardenStore";
+import { startPlantSync } from "@/lib/plantStore";
 
 // three.js needs window/WebGL, so the canvas only renders in the browser.
 const GardenCanvas = dynamic(() => import("@/components/garden/GardenCanvas"), {
@@ -40,6 +42,9 @@ export default function GardenExperience() {
     void useGardenStore.persist.rehydrate();
   }, []);
 
+  // The shared garden: load what's been planted and watch for new plants.
+  useEffect(() => startPlantSync(), []);
+
   return (
     <MotionConfig reducedMotion="user">
       <main className="fixed inset-0 overflow-hidden">
@@ -47,6 +52,7 @@ export default function GardenExperience() {
           <GardenCanvas />
         </div>
         <GardenHud />
+        <PlantPanel />
         <LetterModal />
         <IntroOverlay />
       </main>

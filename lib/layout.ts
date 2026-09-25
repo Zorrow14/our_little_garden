@@ -42,6 +42,14 @@ export const PATH_CURVE = new THREE.CatmullRomCurve3(
 
 const PATH_SAMPLES = PATH_CURVE.getSpacedPoints(120);
 
+/**
+ * The fence around the garden: a circle just past the grass, before the hills
+ * rise, with a gate where the stepping-stone path comes in.
+ */
+export const FENCE = { x: 0, z: -0.8, radius: 13 } as const;
+const pathStart = PATH_CURVE.getPoint(0);
+export const GATE_ANGLE = Math.atan2(pathStart.z - FENCE.z, pathStart.x - FENCE.x);
+
 export function distanceToPath(x: number, z: number) {
   let min = Infinity;
   for (const p of PATH_SAMPLES) min = Math.min(min, Math.hypot(p.x - x, p.z - z));

@@ -5,18 +5,39 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { type Memory, memories } from "@/data/memories";
 import { useGardenStore } from "@/lib/gardenStore";
+import { usePlantStore } from "@/lib/plantStore";
+import { type Plant, plantKind } from "@/lib/plants";
 import FlowerGlyph from "./FlowerGlyph";
 
 type Stage = "sealed" | "opening" | "open";
 
+/** A letter to show: one of the original seven, or one planted in the shared garden (which is signed). */
+type Letter = Memory & { planted?: { by: string; on: string } };
+
+function letterFromPlant(plant: Plant): Letter {
+  return {
+    id: plant.id,
+    flower: plantKind(plant.flower_type),
+    label: plant.category_label,
+    message: plant.message,
+    photo: plant.photo_url ? { src: plant.photo_url, alt: `A photo from ${plant.planted_by}` } : undefined,
+    audio: plant.audio_url ? { src: plant.audio_url, title: `A voice note from ${plant.planted_by}` } : undefined,
+    planted: { by: plant.planted_by, on: plant.created_at },
+  };
+}
+
 export default function LetterModal() {
   const activeId = useGardenStore((s) => s.activeId);
-  const memory = memories.find((m) => m.id === activeId);
+  const plant = usePlantStore((s) => s.plants.find((p) => p.id === activeId));
+  const memory: Letter | undefined = memories.find((m) => m.id === activeId) ?? (plant && letterFromPlant(plant));
   return <AnimatePresence>{memory && <LetterDialog key={memory.id} memory={memory} />}</AnimatePresence>;
 }
 
-function LetterDialog({ memory }: { memory: Memory }) {
-  const markRead = useGardenStore((s) => s.markRead);
+function LetterDialog({ memory }: { memory: Letter }) {
+  const markLetterRead = useGardenStore((s) => s.markRead);
+  const markPlantRead = usePlantStore((s) => s.markPlantRead);
+  // Planted letters keep their own read list, apart from the original seven's progress.
+  const markRead = memory.planted ? markPlantRead : markLetterRead;
   const closeLetter = useGardenStore((s) => s.closeLetter);
   const [stage, setStage] = useState<Stage>("sealed");
   const dialog = useRef<HTMLDivElement>(null);
@@ -161,7 +182,7 @@ function Envelope({
   );
 }
 
-function LetterPaper({ memory, onClose }: { memory: Memory; onClose: () => void }) {
+function LetterPaper({ memory, onClose }: { memory: Letter; onClose: () => void }) {
   const paper = useRef<HTMLElement>(null);
   const paragraphs = memory.message
     .split(/\n\s*\n/)
@@ -201,6 +222,15 @@ function LetterPaper({ memory, onClose }: { memory: Memory; onClose: () => void 
         ))}
       </div>
 
+      {memory.planted && (
+        <p className="mt-8 text-right">
+          <span className="font-hand text-[1.45rem] leading-none">— {memory.planted.by}</span>
+          <span className="mt-1.5 block text-[0.8rem] text-ink/55">
+            planted {new Date(memory.planted.on).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
+          </span>
+        </p>
+      )}
+
       {memory.photo && (
         <figure className="mx-auto my-10 w-[86%] -rotate-[1.5deg] bg-white p-2.5 pb-10 shadow-[0_12px_26px_-12px_rgb(20_20_50/0.5)]">
           <Image
@@ -208,6 +238,8 @@ function LetterPaper({ memory, onClose }: { memory: Memory; onClose: () => void 
             alt={memory.photo.alt}
             width={1200}
             height={900}
+            // Planted photos come straight from Supabase Storage, already sized on upload.
+            unoptimized={memory.photo.src.startsWith("http")}
             sizes="(max-width: 640px) 80vw, 28rem"
             className="h-auto w-full"
           />
