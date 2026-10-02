@@ -3,6 +3,7 @@ import { HOUSE_DOOR, houseIsWalkable, houseNearestWalkable, houseOffGroundBy, ho
 import { COTTAGE, DOOR, OFF_DOORSTEP, onProcession, PROCESSION_LENGTH } from "@/lib/procession";
 import { bridgeCrossing, bridgeHeight, bridgeLanding } from "@/lib/bridge";
 import {
+  type EntranceId,
   ENTRANCES,
   entranceLanding,
   FAR_BRIDGE,
@@ -14,13 +15,24 @@ import {
   farOffGroundBy,
   farPlanWander,
 } from "@/lib/farGarden";
+import { GAZEBO_PLAN, gazeboHeight } from "@/lib/places/gazebo";
+import { GREENHOUSE_PLAN } from "@/lib/places/greenhouse";
+import { LIGHTHOUSE_PLAN } from "@/lib/places/lighthouse";
+import { MAZE_PLAN } from "@/lib/places/maze";
+import { TREEHOUSE_PLAN } from "@/lib/places/treehouse";
 import { deckHeight, GARDEN_BRIDGE } from "@/lib/props";
+import { type RoomPlan, roomDoor, roomGround } from "@/lib/rooms";
 import { groundHeight, WATER_Y } from "@/lib/terrain";
 import { isWalkable, nearestWalkable, offGroundBy, planWander, type Point, type WanderPlan } from "@/lib/wander";
 import { goToZone, type ZoneName } from "@/lib/zones";
 import FarGardenZone from "./FarGardenZone";
 import GardenZone from "./GardenZone";
 import HouseZone from "./HouseZone";
+import GazeboZone from "./places/GazeboZone";
+import GreenhouseZone from "./places/GreenhouseZone";
+import LighthouseZone from "./places/LighthouseZone";
+import MazeZone from "./places/MazeZone";
+import TreehouseZone from "./places/TreehouseZone";
 
 /** A place to appear when arriving in a zone, facing `yaw`. */
 export interface SpawnPoint {
@@ -77,6 +89,31 @@ const spawnOnPath = (s: number): SpawnPoint => {
   const p = onProcession(s, 0);
   return { x: p.x, z: p.z, yaw: p.heading };
 };
+
+/**
+ * A place off the far garden, through `entrance` there: laid out as a
+ * `RoomPlan`, you arrive a step in from its door, and walking back into the
+ * door (or clicking it) leads out to just in front of that entrance.
+ */
+function farGardenPlace(Scene: ComponentType, plan: RoomPlan, entrance: EntranceId, height: (x: number, z: number) => number = () => 0): ZoneDefinition {
+  const ground = roomGround(plan);
+  const door = roomDoor(plan);
+  return {
+    Scene,
+    ground: {
+      height,
+      offGroundBy: (x, z) => ground.offGroundBy(x, z),
+      isWalkable: (x, z) => ground.isWalkable(x, z),
+      planWander: (from, claimed, blockers, _plants, rand) => ground.planWander(from, claimed, blockers, rand),
+      nearestWalkable: (p) => ground.nearestWalkable(p),
+    },
+    spawns: {
+      /** In from the far garden: a step inside the door. */
+      "far-garden": door.spawn,
+    },
+    exits: [{ name: "far-garden", ...door.exit, to: "far-garden", spawn: entrance }],
+  };
+}
 
 /**
  * Every zone, by name. To add one: build its scene (with its own camera), give
@@ -138,15 +175,21 @@ export const ZONES = {
     spawns: {
       /** Over the bridge from the garden: just in from its far-garden end, facing the meadow. */
       bridge: FAR_LANDING,
-      /** Back out of each entrance's place (once it's built): just in front of it. */
+      /** Back out of each entrance's place: just in front of it. */
       ...Object.fromEntries(ENTRANCES.map((e) => [e.id, entranceLanding(e)])),
     },
     exits: [
       { name: "bridge", ...FAR_CROSSING, to: "garden", spawn: "bridge" },
-      // Each entrance becomes a way in once the place behind it is built and named in its `to`.
+      // Each entrance with a `to` is a way into the place behind it.
       ...ENTRANCES.flatMap((e) => (e.to ? [{ name: e.id, at: { x: e.x, z: e.z }, radius: 0.42, to: e.to, spawn: "far-garden" }] : [])),
     ],
   },
+  // The places off the far garden, each through its entrance there.
+  greenhouse: farGardenPlace(GreenhouseZone, GREENHOUSE_PLAN, "greenhouse"),
+  treehouse: farGardenPlace(TreehouseZone, TREEHOUSE_PLAN, "treehouse"),
+  gazebo: farGardenPlace(GazeboZone, GAZEBO_PLAN, "gazebo", gazeboHeight),
+  lighthouse: farGardenPlace(LighthouseZone, LIGHTHOUSE_PLAN, "lighthouse"),
+  maze: farGardenPlace(MazeZone, MAZE_PLAN, "maze"),
 } satisfies Record<ZoneName, ZoneDefinition>;
 
 /** Every zone has its scene and ground, typed loosely enough to look up by a `ZoneName` held in a variable. */

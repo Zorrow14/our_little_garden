@@ -73,7 +73,7 @@ In the cinematic, the camera flies to the cottage outside the gate, then the doo
 - **Wandering:** `lib/wander.ts` picks walkable targets, avoiding the pond, flowers, plants and each other. `offGroundBy` is the looser check for steered gardeners.
 
 ### Zones (`components/zones/registry.ts`)
-- **The registry:** `ZONES` maps each zone name (`garden`, `house`, `far-garden`) to four things:
+- **The registry:** `ZONES` maps each zone name (`garden`, `house`, `far-garden`, and the five places off the far garden: `greenhouse`, `treehouse`, `gazebo`, `lighthouse`, `maze`) to four things:
   - `Scene`: everything in the zone except the gardeners, including its own camera and `OrbitControls`.
   - `ground`: height and walkability, plus the wander planner.
   - `spawns`: arrival points, by entry point.
@@ -99,17 +99,30 @@ In the cinematic, the camera flies to the cottage outside the gate, then the doo
     - Each side has its own bridge over the "same" brook. A brook is a channel cut along an arc (`Brook`/`brookDepth` in `lib/terrain.ts`), with a water ribbon from `props/Brook.tsx`.
     - In the garden, `GARDEN_BRIDGE` (in `lib/props.ts`) sits at `BRIDGE_ANGLE`, through a second gateway in `Fence`. Its walkway joins `offGroundBy`, its deck joins `gardenHeight`, and `Trees` keeps a clearing beyond it.
   - **The meadow:** an open space in its own coordinates, reusing the garden's `Ground`, `Grass` and `Trees`, which now take `terrain`, `field` and `ring` props. It has a signpost in the middle and five entrances (`ENTRANCES`) evenly round it.
-  - **Adding a structure (Phase 3):** each entrance has a `to: ZoneName | null`. To open one:
-    - build its zone, giving it a spawn named `far-garden` and an exit back to the far garden's spawn named after the entrance's id (`entranceLanding`);
-    - set `to`.
-    The registry turns every entrance with a `to` into an exit (walk into the doorway, or click it). Until then, clicking it says it's still being built. Neither the bridge nor zone switching needs touching.
+  - **Entrances:** each has a `to: ZoneName | null`. The registry turns every entrance with a `to` into an exit (walk into the doorway, or click it); one with `to: null` says it's still being built. All five now lead somewhere. The markers are in `components/zones/far/Entrances.tsx`; the lighthouse's is a tall tower with a turning beam, a landmark from across the meadow.
+- **The places off the far garden (`lib/places/`, `components/zones/places/`):** one layout file and one scene each, registered with `farGardenPlace(Scene, plan, entrance, height?)` in the registry. That gives the zone the usual shape: ground from the plan, a spawn named `far-garden` a step inside its door, and an exit by the door back to the far garden's spawn named after the entrance (`entranceLanding`, just in front of it).
+  - **`RoomPlan` (`lib/rooms.ts`):** a floor (rectangle or circle) centred on the origin, a door on its edge, and solids (circles, boxes, or walls as thick lines). `roomGround` turns it into walking rules and `roomDoor` into the spawn and exit. The cottage predates it and keeps `lib/house.ts`.
+  - **Shared scene pieces (`components/zones/places/shared.tsx`):**
+    - `PlaceCamera`, with a `PlaceView` whose `follow` is `still` (a room), `edges` (a lawn) or `always` (the maze);
+    - `WayOut`, the clickable door back;
+    - `boxRoomWalls`, cottage-style cutaway walls (the panels come from `components/zones/walls.ts`, shared with the cottage);
+    - `CountdownWhenNear`.
+
+    Indoors, merged parts use `plain` materials (`useMergedParts(build, palette, plain)`), which stay in full colour like the cottage's. Outdoors, they use the default `matte`, which colours in as the garden grows.
+  - **Greenhouse:** a stand of every `FLOWER_REGISTRY` entry (`CATALOG`), each a real `Flower` with a hand-written name card. Hovering one shows its name and "open when…". The potting bench calls `usePlantStore.openForm()`, the same form and passcode as the Plant button.
+  - **Treehouse:** a small cutaway plank room with a window, which shows a painted view of the far garden. Atmosphere only.
+  - **Gazebo:** an open lawn scene; the gazebo floor is raised in `gazeboHeight`. Deliberately empty, kept for later.
+  - **Lighthouse:** a round room whose wall is a `BackSide` cylinder, so the near half vanishes from any angle. Its lamp keeps the countdown: `lib/countdown.ts` holds `NEXT_VISIT_DATE` (null = off).
+    - **`countdown()`** returns `unset`, `counting` or `arrived`.
+    - **What shows it:** the lamp, the tower's beam and hover tag, and `CountdownWhenNear` (in the far garden by the tower, and inside by the lamp). Each handles all three states, so turning it on is only setting the date.
+  - **Maze:** `PASSAGES` in `lib/places/maze.ts` lists the open edges between cells of a 7×7 grid, and everything else is hedge. Hedges are wall solids, merged into runs. In the clearing grows `HEARTSEASE` (a spec only used here, deliberately not in the registry), with `MAZE_SECRET` as the message.
 - **Cameras:** `components/zones/camera.ts` has what the outdoor zones share:
   - `portraitPull` and `framed` for tall screens;
   - `arrivalPose`, for behind where you appear;
   - `keepPlayerInView`, the follow;
   - `fitFov`.
 
-  The far garden opens on an overview of the meadow when you come over the bridge.
+  The far garden opens on an overview of the meadow, from the bridge to the lighthouse's lamp, when you come over the bridge. Back out of a place, it looks at the doorway you came through.
 - **Keepsakes in the cottage:** these are clickable room objects in `components/zones/HouseKeepsakes.tsx`, each wrapped in `KeepsakeObject` (a halo, plus a point light and a slight lift on hover).
   - **Photo wall:** `useWallPhotos` merges two sources, each tagged with its `origin`:
     - photos hung directly in the cottage: the `house_photos` table, synced by `startHousePhotoSync` in `lib/housePhotos.ts`, with files under `house-photos/` in `garden-media`. Upload is behind the passcode.
@@ -118,7 +131,7 @@ In the cinematic, the camera flies to the cottage outside the gate, then the doo
   - **Notes board:** the `notes` table, synced like plants by `startNoteSync` in `lib/notes.ts`. It's insert/select only, and uses the same passcode gate as planting.
   - **Bookshelf:** the letter archive, which lists only letters opened on this device: `gardenStore.opened` plus `plantStore.read`. Re-reading goes through `selectFlower`, and closing the letter returns to the archive (`useKeepsakes.rereading`).
   - **Panels:** `components/ui/Keepsakes.tsx` holds the panels these open; which one is open is in `lib/keepsakes.ts`. Walking and the joystick pause while one is open.
-- **Music indoors:** `lib/music.ts` follows the zone. Inside, it crossfades to `HOUSE_SRC` if that's set; otherwise it runs the garden track through a lowpass filter at a lower level.
+- **Music indoors:** `lib/music.ts` follows the zone (`ZONE_INDOORS`: the cottage, greenhouse, treehouse and lighthouse). Inside, it crossfades to `HOUSE_SRC` if that's set; otherwise it runs the garden track through a lowpass filter at a lower level.
 - **Re-entering the garden remounts its scene.** Anything that animates on mount must remember it already ran (see `grown` in `Plants.tsx`).
 - **`?debug` test helpers:** `window.__garden` exposes:
   - `zones`, `player`, `zone()`, `toScreen()`, `exitsOnScreen()`;

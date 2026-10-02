@@ -8,9 +8,9 @@ import type { ZoneName } from "@/lib/zones";
  * The far garden, over the bridge: an open meadow in its own space (centred on
  * the origin, the bridge at the near, +z, edge). A signpost stands in the
  * middle, with five entrances spaced evenly round it. Each is the way into a
- * place of its own (greenhouse, gazebo, lighthouse, maze, treehouse), to be
- * built later as a zone of its own off its entrance, as the cottage is off the
- * garden. Here each is only a doorway, so the meadow stays a modest hub.
+ * place of its own (greenhouse, gazebo, lighthouse, maze, treehouse), a zone
+ * of its own off its entrance, as the cottage is off the garden. Here each is
+ * only a doorway (the lighthouse a tower too), so the meadow stays a modest hub.
  *
  * Pure layout and walkability; the scene is `components/zones/FarGardenZone`.
  */
@@ -49,16 +49,19 @@ export interface Entrance extends Frame {
   /** For its tag: "The greenhouse". */
   label: string;
   /**
-   * The zone it leads into, once that's built; null until then. Setting it
-   * (and registering the zone, with a spawn named "far-garden" by its way back
-   * out) is all it takes: the registry turns every entrance with a `to` into
-   * an exit, and the marker into a door.
+   * The zone it leads into, or null for a doorway that doesn't lead anywhere
+   * yet. The registry turns every entrance with a `to` into an exit, and the
+   * marker into a door; the zone has a spawn named "far-garden" by its way
+   * back out, which leads to the spawn named after the entrance's id.
    */
   to: ZoneName | null;
 }
 
 /** How far out from the signpost the entrances stand. */
 export const ENTRANCE_RING = 9.5;
+
+/** The lighthouse is a tower as well as a doorway: a landmark across the meadow, its lamp turning. */
+export const LIGHTHOUSE_TOWER = { radius: 1.05, top: 0.68, height: 6.2, lamp: 6.75 };
 
 /**
  * The solid parts of each entrance, in its own space (the doorway itself, at
@@ -75,10 +78,8 @@ export const ENTRANCE_SOLIDS: Record<EntranceId, (Point & { r: number })[]> = {
     { x: -0.62, z: 0, r: 0.12 },
     { x: 0.62, z: 0, r: 0.12 },
   ],
-  lighthouse: [
-    { x: -0.66, z: 0, r: 0.22 },
-    { x: 0.66, z: 0, r: 0.22 },
-  ],
+  // The tower, its door in the front of it.
+  lighthouse: [{ x: 0, z: -LIGHTHOUSE_TOWER.radius - 0.1, r: LIGHTHOUSE_TOWER.radius }],
   maze: [
     { x: -0.98, z: 0, r: 0.4 },
     { x: 0.98, z: 0, r: 0.4 },
@@ -91,20 +92,22 @@ export const ENTRANCE_SOLIDS: Record<EntranceId, (Point & { r: number })[]> = {
  * facing the bridge, so the way in from it runs straight up the middle.
  * Each faces the signpost.
  */
-const ORDER: [EntranceId, string][] = [
-  ["greenhouse", "The greenhouse"],
-  ["gazebo", "The gazebo"],
-  ["lighthouse", "The lighthouse"],
-  ["maze", "The maze"],
-  ["treehouse", "The treehouse"],
+const ORDER: [EntranceId, string, ZoneName | null][] = [
+  ["greenhouse", "The greenhouse", "greenhouse"],
+  ["gazebo", "The gazebo", "gazebo"],
+  ["lighthouse", "The lighthouse", "lighthouse"],
+  ["maze", "The maze", "maze"],
+  ["treehouse", "The treehouse", "treehouse"],
 ];
 
-export const ENTRANCES: Entrance[] = ORDER.map(([id, label], i) => {
+export const ENTRANCES: Entrance[] = ORDER.map(([id, label, to], i) => {
   const a = Math.PI / 2 - Math.PI / 5 - (i * 2 * Math.PI) / 5;
   const x = Math.cos(a) * ENTRANCE_RING;
   const z = Math.sin(a) * ENTRANCE_RING;
-  return { id, label, x, z, yaw: Math.atan2(-x, -z), to: null };
+  return { id, label, x, z, yaw: Math.atan2(-x, -z), to };
 });
+
+export const entranceById = (id: EntranceId) => ENTRANCES.find((e) => e.id === id)!;
 
 /** Where you appear coming back out of an entrance's place: just in front of it, facing the signpost. */
 export function entranceLanding(e: Entrance) {

@@ -138,14 +138,17 @@ export interface Part {
 /** Low-poly, flat-shaded and muted with the rest of the garden until it grows: the scenery's usual material. */
 export const matte = (color: string) => withGrowth(new THREE.MeshLambertMaterial({ color, flatShading: true }));
 
+/** The same, always in full colour: for indoors, as in the cottage. */
+export const plain = (color: string) => new THREE.MeshLambertMaterial({ color, flatShading: true });
+
 /**
  * Merges a prop's static pieces into one mesh per material, as the cottage
  * does, so each prop costs a draw call or two rather than dozens.
  */
-export function useMergedParts(build: () => Part[], palette: Record<string, string>) {
+export function useMergedParts(build: () => Part[], palette: Record<string, string>, material: (color: string) => THREE.Material = matte) {
   const materials = useMemo(() => {
     const all: Record<string, THREE.Material> = {};
-    for (const [key, color] of Object.entries(palette)) all[key] = matte(color);
+    for (const [key, color] of Object.entries(palette)) all[key] = material(color);
     return all;
     // The palette is a constant per prop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -185,6 +188,13 @@ export function useMergedParts(build: () => Part[], palette: Record<string, stri
 }
 
 export const box = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d);
+
+/** Merges throwaway pieces (all indexed, as three's built-in shapes are) into one geometry, disposing them. */
+export function mergedGeometry(pieces: THREE.BufferGeometry[]) {
+  const g = mergeGeometries(pieces)!;
+  pieces.forEach((p) => p.dispose());
+  return g;
+}
 
 /** A cylinder from `a` to `b`, as a geometry already in place (for branches and ropes). */
 export function rod(a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number, sides = 6) {

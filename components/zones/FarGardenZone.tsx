@@ -55,7 +55,7 @@ const FAR_FIELD: GrassField = {
   open: (x, z) => distanceToPaths(x, z) > 0.45 && !nearSolid({ x, z }, 0.2) && brookDepth(FAR_BROOK, x, z) === 0,
 };
 
-/** Trees round the meadow, with a gap on past the bridge. */
+/** Trees round the meadow, with a gap past the bridge, widening away from it, for the view you arrive to. */
 const FAR_RING: TreeRing = {
   seed: 17,
   count: 48,
@@ -64,7 +64,7 @@ const FAR_RING: TreeRing = {
   height: farHeight,
   clearing: (x, z) => {
     const past = toLocal(FAR_BRIDGE, x, z);
-    return past.z > -1 && Math.abs(past.x) < 2.4;
+    return past.z > -1 && Math.abs(past.x) < 2.4 + Math.max(0, past.z) * 0.6;
   },
 };
 
@@ -92,13 +92,17 @@ export default function FarGardenZone() {
   );
 }
 
-/** Over the bridge: up above the near edge, looking across the whole meadow, signpost and entrances. */
-const OVERVIEW = { target: new THREE.Vector3(0, 0.3, 2.5), offset: new THREE.Vector3(0, 8.2, 16) };
+/**
+ * Over the bridge: high above the near edge, looking across the whole meadow,
+ * from you at the bridge to the top of the lighthouse at the far side.
+ */
+const OVERVIEW = { target: new THREE.Vector3(0, 0.5, 2.2), offset: new THREE.Vector3(0, 11.5, 21.8) };
 
 /**
  * The far garden's camera: arriving over the bridge, an overview of the whole
- * meadow; back out of one of its places, just behind and above where you
- * appear. After that it's free to turn, and follows you as you walk.
+ * meadow; back out of one of its places, out in front of you, looking back at
+ * the doorway you came through. After that it's free to turn, and follows you
+ * as you walk.
  */
 function FarCamera() {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
@@ -113,8 +117,9 @@ function FarCamera() {
     const arrival = useZone.getState().arrival;
     const spawn = arrival && arrival !== "bridge" ? spawns[arrival as keyof typeof spawns] : null;
     const pose = spawn
-      ? arrivalPose(spawn, farHeight, 4, 3.2, camera.aspect)
-      : { target: OVERVIEW.target.clone(), position: OVERVIEW.target.clone().addScaledVector(OVERVIEW.offset, portraitPull(camera.aspect)) };
+      ? arrivalPose({ ...spawn, yaw: spawn.yaw + Math.PI }, farHeight, 5.5, 3.4, camera.aspect)
+      : // Backed off less than usual on tall screens: their wider view does the rest.
+        { target: OVERVIEW.target.clone(), position: OVERVIEW.target.clone().addScaledVector(OVERVIEW.offset, THREE.MathUtils.lerp(1, portraitPull(camera.aspect), 0.5)) };
     camera.position.copy(pose.position);
     controls.current.target.copy(pose.target);
     camera.lookAt(pose.target);
@@ -133,7 +138,7 @@ function FarCamera() {
       rotateSpeed={0.5}
       zoomSpeed={0.7}
       minDistance={3}
-      maxDistance={16 * pull}
+      maxDistance={25 * pull}
       minPolarAngle={0.5}
       maxPolarAngle={1.32}
     />

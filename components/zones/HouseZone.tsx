@@ -14,6 +14,7 @@ import { getGlowTexture } from "@/lib/textures";
 import { useZone } from "@/lib/zones";
 import { ArchiveShelf, MoonBeam, NotesBoard, PhotoWall, useWindowViewTexture } from "./HouseKeepsakes";
 import { takeExit } from "./registry";
+import { wallPanels, type WallSpec } from "./walls";
 
 const { halfWidth: W, halfDepth: D, height: H } = ROOM;
 
@@ -94,15 +95,6 @@ function HouseLights() {
   );
 }
 
-/** One wall, as a plane facing into the room. `holes` leave gaps for the window and door. */
-interface WallSpec {
-  /** Where the wall's left edge (seen from inside) starts, its length, and how it's turned. */
-  position: [number, number, number];
-  rotation: number;
-  length: number;
-  holes?: { from: number; to: number; bottom: number; top: number }[];
-}
-
 const WALLS: WallSpec[] = [
   {
     // Back wall, with the window.
@@ -129,21 +121,6 @@ const WALLS: WallSpec[] = [
   { position: [W, 0, -D], rotation: -Math.PI / 2, length: D * 2 },
   { position: [W, 0, D], rotation: Math.PI, length: W * 2 },
 ];
-
-/** Rectangles covering a wall of `length` × `height` around its holes, in the wall's own 2D space. */
-function wallPanels(length: number, height: number, holes: WallSpec["holes"] = []) {
-  const panels: { x: number; y: number; w: number; h: number }[] = [];
-  const cuts = [...holes].sort((a, b) => a.from - b.from);
-  let x = 0;
-  for (const hole of cuts) {
-    if (hole.from > x) panels.push({ x, y: 0, w: hole.from - x, h: height });
-    if (hole.bottom > 0) panels.push({ x: hole.from, y: 0, w: hole.to - hole.from, h: hole.bottom });
-    if (hole.top < height) panels.push({ x: hole.from, y: hole.top, w: hole.to - hole.from, h: height - hole.top });
-    x = hole.to;
-  }
-  if (x < length) panels.push({ x, y: 0, w: length - x, h: height });
-  return panels;
-}
 
 const WAINSCOT = 0.72;
 

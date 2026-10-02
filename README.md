@@ -81,10 +81,21 @@ Inside, the music softens as if heard through the walls. To use a separate cotta
 
 **The far garden.** At the back of the garden, a gateway in the fence leads to a little wooden bridge over a brook.
 - **Getting there:** walk over the bridge (or click it) to reach the far garden, an open meadow with a signpost in the middle.
-- **The doorways:** five are spaced around it: a greenhouse door, a white gazebo arch, a stone gateway with a lighthouse lamp, a hedge arch into the maze, and a ladder up to a treehouse. Each is the way into a place still to be built, so for now clicking one just says so.
+- **The doorways:** five are spaced around it, each the way into a place of its own. Walk into one, or click it, to go in; walk back out of its door, or click the door, to come back out in front of it.
 - **Getting back:** cross the bridge.
 
-You only see the other person's gardener when you're in the same place. The top-left corner says where they are: "here with you", "in the garden", "in the cottage", "in the far garden", or "away". While someone is away, their gardener is at home in the cottage, pottering about.
+The five places off the far garden:
+- **The greenhouse:** warm glass, with one of every kind of flower on a stand along the back, each with its name card (hover one to see what it's for). Click the potting bench to plant something: it's the same form and passcode as the **Plant something** button.
+- **The treehouse:** up the rope ladder, a small cosy room with a nest of cushions, a candle, and a window looking down over the far garden. Nothing to do; it's just for the two of you.
+- **The gazebo:** an open white gazebo on a lawn, with vines and wisteria, lanterns and a bench. Quiet, and left open for whatever it's for later.
+- **The lighthouse:** a tall striped tower, its light sweeping over the meadow. Inside, a lamp keeps a countdown to your next visit:
+  - **To turn it on:** set `NEXT_VISIT_DATE` in [`lib/countdown.ts`](lib/countdown.ts) to a date and time with its time zone, e.g. `"2026-12-20T15:00:00+08:00"`, and redeploy.
+  - **While it counts:** walking up to the tower or the lamp (or clicking the lamp) says how many days and hours are left.
+  - **Once the day comes:** it celebrates instead, until you set the next date.
+  - **With no date:** the lamp sits unlit and says nothing.
+- **The maze:** a small hedge maze, a few minutes' walk, with a fork or two and some dead ends. In the clearing in the middle is a flower that grows nowhere else, with a message for whoever reaches it. Change the message with `MAZE_SECRET` in [`lib/places/maze.ts`](lib/places/maze.ts).
+
+You only see the other person's gardener when you're in the same place. The top-left corner says where they are: "here with you", "in the garden", "in the cottage", "in the far garden", "in the greenhouse", "up in the treehouse", "in the gazebo", "in the lighthouse", "in the maze", or "away". While someone is away, their gardener is at home in the cottage, pottering about.
 
 This runs on a Supabase Realtime channel (`garden-live`):
 - **Presence** says who's online.
@@ -134,8 +145,10 @@ The site is public to anyone with its URL (it's hidden from search engines), so 
 | `components/garden/Gardeners.tsx` | Zorrow and Skelly: their looks, pace, wandering, tending and the wave when tapped, their walk in from the cottage, and walking them yourself or live |
 | `lib/presence.ts`, `lib/playerInput.ts` | The live garden: who you are, who's online, sending and replaying movement; keyboard and joystick input |
 | `components/ui/PlayerControls.tsx`, `components/ui/WhoAreYou.tsx` | WASD/arrow keys and the touch joystick; the "Who are you?" question |
-| `components/zones/registry.ts`, `lib/zones.ts` | The zones (garden, cottage interior): each one's scene, spawn points and exits, and which one is showing |
+| `components/zones/registry.ts`, `lib/zones.ts` | The zones (garden, cottage, far garden and its five places): each one's scene, spawn points and exits, and which one is showing |
 | `components/zones/FarGardenZone.tsx`, `components/zones/far/`, `lib/farGarden.ts` | The far garden: its meadow, signpost and five entrances |
+| `components/zones/places/`, `lib/places/`, `lib/rooms.ts` | The greenhouse, treehouse, gazebo, lighthouse and maze: their scenes, layouts, and walking about in them |
+| `lib/countdown.ts` | The lighthouse's countdown: the date of your next visit |
 | `lib/bridge.ts`, `components/garden/props/Bridge.tsx`, `components/garden/props/Brook.tsx` | The bridges and the brook between the garden and the far garden |
 | `components/zones/HouseZone.tsx`, `lib/house.ts` | The cottage's interior and its layout |
 | `components/zones/HouseKeepsakes.tsx`, `components/ui/Keepsakes.tsx` | The photo wall, notes board and letter shelf in the room, and the panels they open |

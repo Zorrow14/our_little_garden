@@ -1,14 +1,14 @@
 import { create } from "zustand";
 
 /**
- * The places you can be: the garden, the inside of the cottage, and the far
- * garden over the bridge (with more to come off it). Each zone's
+ * The places you can be: the garden, the inside of the cottage, the far
+ * garden over the bridge, and the five places off the far garden. Each zone's
  * scene, spawn points and exits are registered in `components/zones/registry`;
  * this file holds just the names and which zone is showing, so the UI can use
  * them without pulling in three.js.
  */
 
-export const ZONE_NAMES = ["garden", "house", "far-garden"] as const;
+export const ZONE_NAMES = ["garden", "house", "far-garden", "greenhouse", "treehouse", "gazebo", "lighthouse", "maze"] as const;
 export type ZoneName = (typeof ZONE_NAMES)[number];
 
 export const isZone = (value: unknown): value is ZoneName => ZONE_NAMES.includes(value as ZoneName);
@@ -18,6 +18,11 @@ export const ZONE_PLACES: Record<ZoneName, string> = {
   garden: "in the garden",
   house: "in the cottage",
   "far-garden": "in the far garden",
+  greenhouse: "in the greenhouse",
+  treehouse: "up in the treehouse",
+  gazebo: "in the gazebo",
+  lighthouse: "in the lighthouse",
+  maze: "in the maze",
 };
 
 /** The same, in a word or two, for "Skelly · cottage" on narrow screens. */
@@ -25,6 +30,11 @@ export const ZONE_SHORT: Record<ZoneName, string> = {
   garden: "garden",
   house: "cottage",
   "far-garden": "far garden",
+  greenhouse: "greenhouse",
+  treehouse: "treehouse",
+  gazebo: "gazebo",
+  lighthouse: "lighthouse",
+  maze: "maze",
 };
 
 /** Whether a zone is indoors, where the music is heard through the walls. */
@@ -32,6 +42,11 @@ export const ZONE_INDOORS: Record<ZoneName, boolean> = {
   garden: false,
   house: true,
   "far-garden": false,
+  greenhouse: true,
+  treehouse: true,
+  gazebo: false,
+  lighthouse: true,
+  maze: false,
 };
 
 /** Where you arrive when the site opens. */

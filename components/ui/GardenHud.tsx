@@ -8,7 +8,7 @@ import { usePlantStore } from "@/lib/plantStore";
 import { openKeepsake, useKeepsakes } from "@/lib/keepsakes";
 import { usePresence } from "@/lib/presence";
 import { useStargazing } from "@/lib/stargazing";
-import { useZone } from "@/lib/zones";
+import { useZone, type ZoneName } from "@/lib/zones";
 import FlowerGlyph from "./FlowerGlyph";
 
 /** "Tap" on touch screens, "Click" with a mouse. */
@@ -30,6 +30,24 @@ function Walk({ name }: { name: string }) {
     </>
   );
 }
+
+/** What to say in the far garden and each of the places off it. */
+const PLACE_HINTS: Partial<Record<ZoneName, ReactNode>> = {
+  "far-garden": "Five doorways, each to somewhere of its own. Cross the bridge to go back.",
+  greenhouse: (
+    <>
+      One of every flower. <Tap /> the potting bench to plant something
+    </>
+  ),
+  treehouse: "Just the two of you, up in the leaves",
+  gazebo: "A quiet place to sit for a while",
+  lighthouse: (
+    <>
+      <Tap /> the lamp, or walk up to it
+    </>
+  ),
+  maze: "Find your way to the middle",
+};
 
 export default function GardenHud() {
   const keepsakeOpen = useKeepsakes((s) => s.open !== null);
@@ -70,12 +88,12 @@ export default function GardenHud() {
         </>
       ),
     };
-  else if (zone === "far-garden")
+  else if (zone in PLACE_HINTS)
     hint = {
-      key: walkHint ? "far-walk" : "far",
+      key: walkHint ? `${zone}-walk` : zone,
       text: (
         <>
-          Five doorways, each to somewhere still being built. Cross the bridge to go back.
+          {PLACE_HINTS[zone as keyof typeof PLACE_HINTS]}
           {walkHint && <span className="block">{walkHint}</span>}
         </>
       ),
