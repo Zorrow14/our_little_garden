@@ -7,6 +7,7 @@ import { useGardenStore } from "@/lib/gardenStore";
 import { plantLetter, planting, usePlantStore } from "@/lib/plantStore";
 import { useMusic } from "@/lib/music";
 import { checkPasscode, PLANT_KINDS } from "@/lib/plants";
+import { usePresence } from "@/lib/presence";
 
 /** What the label field starts as, before a flower's suggestion or her own words replace it. */
 const BLANK_LABEL = "Open when ";
@@ -176,7 +177,7 @@ function PlantForm({ titleId, onDone }: { titleId: string; onDone: () => void })
   const [kind, setKind] = useState<FlowerType>("tulip");
   const [label, setLabel] = useState(BLANK_LABEL);
   const [message, setMessage] = useState("");
-  const [name, setName] = useState(planting.savedName);
+  const [name, setName] = useState(() => planting.savedName() || (usePresence.getState().me ?? ""));
   const [photo, setPhoto] = useState<File | null>(null);
   const [audio, setAudio] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);

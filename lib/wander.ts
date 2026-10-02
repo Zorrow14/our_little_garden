@@ -58,6 +58,26 @@ export function isClearWalk(a: Point, b: Point, plants: Point[], blockers: Point
   return isWalkable(b.x, b.z, plants);
 }
 
+/** Walking your own gardener: anywhere inside the fence, short of the pond's rim and stepping round the flowers. */
+const PLAYER_REACH = FENCE.radius - 1.4;
+const PLAYER_POND_CLEARANCE = POND.radius * 1.12;
+const PLAYER_FLOWER_CLEARANCE = 0.42;
+const PLAYER_PLANT_CLEARANCE = 0.32;
+
+/**
+ * How far into somewhere a walking gardener shouldn't be (past the edge, into
+ * the pond, onto a flower): 0 on open ground. A step is allowed if it lands on
+ * open ground or gets less stuck, so a gardener who starts in the gateway, past
+ * the edge, can still walk in.
+ */
+export function offGroundBy(x: number, z: number, plants: Point[]) {
+  let by = Math.max(0, Math.hypot(x - FENCE.x, z - FENCE.z) - PLAYER_REACH);
+  by += Math.max(0, PLAYER_POND_CLEARANCE - distanceToPond(x, z));
+  by += Math.max(0, PLAYER_FLOWER_CLEARANCE - distanceToFlowers(x, z));
+  for (const p of plants) by += Math.max(0, PLAYER_PLANT_CLEARANCE - Math.hypot(p.x - x, p.z - z));
+  return by;
+}
+
 /** Planted flowers growing on land, which gardeners walk around and sometimes tend. */
 export function landPlants(plants: { position_x: number; position_y: number; position_z: number }[]): Point[] {
   return plants.filter((p) => p.position_y > WATER_Y + 0.01).map((p) => ({ x: p.position_x, z: p.position_z }));

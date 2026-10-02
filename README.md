@@ -48,6 +48,21 @@ The passcode is checked in the browser against a SHA-256 hash in [`lib/plants.ts
 
 Unfamiliar `flower_type` values (added by hand in the dashboard, say) still render as one of the six flowers.
 
+## Walking together
+
+The first time each device opens the garden, it asks **Who are you? Zorrow / Skelly**. The answer is saved in the browser, and there's a "Not Zorrow?" link under "Enter the garden" to change it.
+
+- **Your own gardener:** you walk it with WASD or the arrow keys. On a phone, use the joystick that appears bottom left. The view follows when you near the edge of the screen.
+- **The other gardener, while they're here:** if the other person has the garden open, their gardener walks wherever they steer it, live on your screen. A note says when they arrive.
+- **The other gardener, while they're away:** it wanders and tends the flowers on its own, as before. When they come back, it hurries over to wherever they are.
+- **Waving:** tapping either gardener makes it wave on both screens. If they tap yours, you get a "waved at you" note.
+
+This runs on a Supabase Realtime channel (`garden-live`):
+- **Presence** says who's online.
+- **Broadcast** carries movement, about 12 updates a second while walking, plus waves.
+
+Nothing is stored. There's no login: the name is just a choice on each device.
+
 ## Testing flags
 
 Add these to the URL:
@@ -87,6 +102,8 @@ The site is public to anyone with its URL (it's hidden from search engines), so 
 | `lib/gardenStore.ts` | Garden state: intro stage, open letter, which letters have been read |
 | `lib/plants.ts`, `lib/plantStore.ts` | The shared garden: Supabase reads, uploads, realtime, passcode, where new plants grow |
 | `components/garden/Fence.tsx` | The fence and gate around the garden |
-| `components/garden/Gardeners.tsx` | Zorrow and Skelly: their looks, pace, wandering, tending and the wave when tapped, and their walk in from the cottage |
+| `components/garden/Gardeners.tsx` | Zorrow and Skelly: their looks, pace, wandering, tending and the wave when tapped, their walk in from the cottage, and walking them yourself or live |
+| `lib/presence.ts`, `lib/playerInput.ts` | The live garden: who you are, who's online, sending and replaying movement; keyboard and joystick input |
+| `components/ui/PlayerControls.tsx`, `components/ui/WhoAreYou.tsx` | WASD/arrow keys and the touch joystick; the "Who are you?" question |
 | `components/garden/Cottage.tsx`, `lib/procession.ts` | The cottage outside the gate, its path, and the intro's walk and camera shots (runs after "Enter the garden"; there's a Skip intro link) |
 | `components/garden/GardenerBody.tsx`, `lib/wander.ts` | How the gardeners are built from simple shapes, and where they're allowed to walk |

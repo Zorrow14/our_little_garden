@@ -9,6 +9,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { FINAL_ID, useGardenStore } from "@/lib/gardenStore";
 import { gsap } from "@/lib/gsap";
 import { flowerAnchors } from "@/lib/layout";
+import { player } from "@/lib/playerInput";
 import { GATE, INTRO_SHOTS, PROCESSION_LENGTH, procession } from "@/lib/procession";
 import { groundHeight } from "@/lib/terrain";
 
@@ -49,6 +50,11 @@ function introShot(position: THREE.Vector3, target: THREE.Vector3, aspect: numbe
 const LOOK_ABOVE_FEET = new THREE.Vector3(0, 0.75, 0);
 const GATE_TARGET = new THREE.Vector3(GATE.x, groundHeight(GATE.x, GATE.z) + 0.75, GATE.z);
 
+/** How near the edges of the screen your gardener can stroll before the view follows (in -1..1 screen units). */
+const SAFE_X = 0.6;
+const SAFE_TOP = 0.45;
+const SAFE_BOTTOM = -0.5;
+
 /** A viewpoint on the same side as `from`, looking at `anchor` from a little above. */
 function focusPose(anchor: THREE.Vector3, from: THREE.Vector3, distance: number, height: number): Pose {
   const direction = from.clone().sub(anchor).setY(0);
@@ -77,6 +83,7 @@ export default function CameraRig() {
   const introPhase = useRef<"reveal" | "follow" | "settle" | "done">("done");
   const focus = useMemo(() => new THREE.Vector3(), []);
   const wanted = useMemo(() => new THREE.Vector3(), []);
+  const onScreen = useMemo(() => new THREE.Vector3(), []);
 
   /** Glide camera and orbit target together; the controls are paused for the flight. */
   const flyTo = (pose: Pose, duration: number, onArrive?: () => void) => {
@@ -116,6 +123,27 @@ export default function CameraRig() {
     };
   }, [camera]);
 
+  /**
+   * While you walk your gardener, the view drifts along with them once they
+   * near the edge of the screen, keeping its angle and distance. Standing
+   * still, the view stays wherever you've turned it.
+   */
+  const keepPlayerInView = (delta: number) => {
+    const c = controls.current;
+    if (!player.active || !player.moving || !c.enabled) return;
+    onScreen.set(player.x, player.y + 0.6, player.z).project(camera);
+    const behind = onScreen.z > 1;
+    const outside = Math.max(Math.abs(onScreen.x) - SAFE_X, onScreen.y - SAFE_TOP, SAFE_BOTTOM - onScreen.y, 0);
+    if (!behind && outside === 0) return;
+    const k = Math.min(1, behind ? 1 : outside * 3) * (1 - Math.exp(-5 * delta));
+    const dx = (player.x - c.target.x) * k;
+    const dz = (player.z - c.target.z) * k;
+    c.target.x += dx;
+    c.target.z += dz;
+    camera.position.x += dx;
+    camera.position.z += dz;
+  };
+
   /** Glide over the garden, then hand the camera to her. */
   const settle = (duration: number) => {
     introPhase.current = "settle";
@@ -151,6 +179,10 @@ export default function CameraRig() {
 
   useFrame((_, delta) => {
     const phase = introPhase.current;
+    if (phase === "done") {
+      keepPlayerInView(delta);
+      return;
+    }
     if (phase !== "reveal" && phase !== "follow") return;
     if (useGardenStore.getState().introSkipped) {
       settle(1.2);

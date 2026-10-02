@@ -5,6 +5,7 @@ import { type ReactNode, useEffect } from "react";
 import { memories } from "@/data/memories";
 import { bloomedLetterCount, FINAL_ID, LETTER_IDS, useGardenStore } from "@/lib/gardenStore";
 import { usePlantStore } from "@/lib/plantStore";
+import { usePresence } from "@/lib/presence";
 import FlowerGlyph from "./FlowerGlyph";
 
 /** "Tap" on touch screens, "Click" with a mouse. */
@@ -17,6 +18,16 @@ function Tap() {
   );
 }
 
+/** How to walk: the joystick on touch screens, the keys with a keyboard. */
+function Walk({ name }: { name: string }) {
+  return (
+    <>
+      <span className="[@media(hover:hover)]:hidden">Use the joystick to walk as {name}</span>
+      <span className="hidden [@media(hover:hover)]:inline">WASD or the arrow keys to walk as {name}</span>
+    </>
+  );
+}
+
 export default function GardenHud() {
   const inGarden = useGardenStore((s) => s.stage === "garden" && !s.activeId);
   const hydrated = useGardenStore((s) => s.hydrated);
@@ -25,6 +36,8 @@ export default function GardenHud() {
   const celebrating = useGardenStore((s) => s.celebrating);
   const notice = useGardenStore((s) => s.notice);
   const clearNotice = useGardenStore((s) => s.clearNotice);
+  const me = usePresence((s) => s.me);
+  const walked = usePresence((s) => s.walked);
 
   useEffect(() => {
     if (!notice) return;
@@ -35,10 +48,23 @@ export default function GardenHud() {
   const finalUnlocked = count === LETTER_IDS.length;
   const finalRead = opened.includes(FINAL_ID);
 
+  // Until the first step, say how to walk your gardener.
+  const walkHint = me && !walked ? <Walk name={me} /> : null;
+
   let hint: { key: string; text: ReactNode } | null = null;
   if (notice) hint = { key: "notice", text: notice };
   else if (celebrating) hint = { key: "celebrating", text: "Something just bloomed at the end of the path." };
-  else if (count === 0 && !finalRead) hint = { key: "start", text: <><Tap /> a flower to open its letter</> };
+  else if (count === 0 && !finalRead)
+    hint = {
+      key: walkHint ? "start-walk" : "start",
+      text: (
+        <>
+          <Tap /> a flower to open its letter
+          {walkHint && <span className="block">{walkHint}</span>}
+        </>
+      ),
+    };
+  else if (walkHint) hint = { key: "walk", text: walkHint };
   else if (finalUnlocked && !finalRead) hint = { key: "final", text: "The last flower is waiting for you at the end of the path." };
   else if (finalRead) hint = { key: "done", text: "Every letter is open. Come back to them whenever you need." };
 

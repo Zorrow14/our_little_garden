@@ -7,16 +7,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import FlowerTag from "@/components/ui/FlowerTag";
 import { useGardenStore } from "@/lib/gardenStore";
+import { player, readMove } from "@/lib/playerInput";
 import { usePlantStore } from "@/lib/plantStore";
+import { type GardenerName, greetSignals, livePose, markWalked, sendGreet, sendPose, usePresence } from "@/lib/presence";
 import { OFF_DOORSTEP, onProcession, PROCESSION_LENGTH, procession } from "@/lib/procession";
-import { createRandom, groundHeight } from "@/lib/terrain";
+import { createRandom, groundHeight, WATER_Y } from "@/lib/terrain";
 import { getGlowTexture } from "@/lib/textures";
-import { landPlants, nearestWalkable, planWander, type Point } from "@/lib/wander";
+import { isWalkable, landPlants, nearestWalkable, offGroundBy, planWander, type Point } from "@/lib/wander";
 import GardenerBody, { DROPLET_COUNT, type GardenerLook, type GardenerRig } from "./GardenerBody";
 
 interface GardenerProfile {
   id: string;
-  name: string;
+  name: GardenerName;
   /** Shown under the name on the hover tag. */
   note: string;
   look: GardenerLook;
@@ -84,7 +86,11 @@ const CREW: GardenerProfile[] = [
 /** Where each gardener is and where they're heading, so they can keep out of each other's way. */
 type Whereabouts = Map<string, { pos: Point; target: Point | null }>;
 
-/** Two little gardeners who wander the garden, tend its flowers, and wave when you tap them. */
+/**
+ * Two little gardeners, one for each of you. Yours walks where you steer it;
+ * the other follows its owner live while they're here, and wanders the garden
+ * and tends its flowers on its own while they're away. Either waves when tapped.
+ */
 export default function Gardeners() {
   const whereabouts = useMemo<Whereabouts>(() => new Map(), []);
   const shadowMaterial = useMemo(
@@ -102,15 +108,26 @@ export default function Gardeners() {
 /**
  * Each gardener's state machine. The intro runs once: `waiting` inside the
  * cottage until the door opens, then `intro-walk` along the scripted path to
- * just inside the gate. From there they wander for good: `idle` and `walk`
- * between random spots, and `greet` when tapped.
+ * just inside the gate. After that, who's driving decides:
+ * - `player`: the gardener you are, steered from this device.
+ * - `remote`: the other gardener while their owner is here, following their updates.
+ * - `idle` / `walk` / `greet`: wandering on their own while nobody is driving them
+ *   (their owner is away), pausing to wave when tapped.
+ * Waving when tapped also plays over `player` and `remote` without stopping them.
  */
-type Mode = "waiting" | "intro-walk" | "idle" | "walk" | "greet";
+type Mode = "waiting" | "intro-walk" | "idle" | "walk" | "greet" | "player" | "remote";
 
 /** Pace of the walk in from the cottage: an unhurried stroll, a little brisker than wandering. */
 const INTRO_PACE = 0.7;
 /** How far behind the leader the other follows through the doorway. */
 const SINGLE_FILE_GAP = 0.5;
+/** Walking your own gardener is brisker than their wandering stroll. */
+const PLAYER_PACE = 2.2;
+/** Live updates sent per second while moving, and how often to send one while standing still. */
+const SEND_RATE = 12;
+const HEARTBEAT = 2;
+/** How long a wave lasts. */
+const WAVE_TIME = 2.4;
 
 interface Walker {
   mode: Mode;
@@ -133,7 +150,15 @@ interface Walker {
   moving: number;
   tending: number;
   greeting: number;
+  /** Seconds since the wave began, and seconds of it left. */
   greetTime: number;
+  waving: number;
+  /** Smoothed speed of a remote gardener, from how far they move each frame. */
+  remotePace: number;
+  /** Seconds since the last live update went out, and what it said. */
+  sinceSent: number;
+  sentPace: number;
+  sentYaw: number;
   look: number;
   lookTarget: number;
   lookTimer: number;
@@ -154,13 +179,15 @@ function Gardener({
   whereabouts: Whereabouts;
   shadowMaterial: THREE.Material;
 }) {
-  const { id, look, speed, stride, seed } = profile;
+  const { id, name, look, speed, stride, seed } = profile;
   const root = useRef<THREE.Group>(null!);
   const rig = useMemo(() => ({}) as GardenerRig, []);
   const fadeCenter = useMemo(() => ({ value: new THREE.Vector3() }), []);
   const rand = useMemo(() => createRandom(seed), [seed]);
   const scratch = useMemo(() => new THREE.Vector3(), []);
   const interactive = useGardenStore((s) => s.stage === "garden" && !s.activeId && !s.celebrating);
+  const isMe = usePresence((s) => s.me === name);
+  const ownerHere = usePresence((s) => s.online.includes(name));
   const [hovered, setHovered] = useState(false);
   const hoveredRef = useRef(false);
   const setHover = (on: boolean) => {
@@ -168,6 +195,8 @@ function Gardener({
     setHovered(on);
   };
   const [greetings, setGreetings] = useState(0);
+  /** The last wave signal seen from the other device. */
+  const seenSignal = useRef(greetSignals.get(name) ?? 0);
   useCursor(hovered && interactive);
 
   const [walker] = useState<Walker>(() => {
@@ -184,17 +213,34 @@ function Gardener({
       target: null,
       tend: null,
       timer: 0.5 + rand() * 2,
-    waited: 0,
-    phase: 0,
-    moving: 0,
-    tending: 0,
-    greeting: 0,
-    greetTime: 0,
-    look: 0,
-    lookTarget: 0,
+      waited: 0,
+      phase: 0,
+      moving: 0,
+      tending: 0,
+      greeting: 0,
+      greetTime: 0,
+      waving: 0,
+      remotePace: 0,
+      sinceSent: Infinity,
+      sentPace: 0,
+      sentYaw: 0,
+      look: 0,
+      lookTarget: 0,
       lookTimer: 0,
     };
   });
+
+  /** A wave: the wanderer stops to do it, while a gardener someone is steering waves on the move. */
+  const startWave = () => {
+    const w = walker;
+    if (w.mode === "idle" || w.mode === "walk" || w.mode === "greet") {
+      w.mode = "greet";
+      w.timer = WAVE_TIME;
+    }
+    w.waving = WAVE_TIME;
+    w.greetTime = 0;
+    setGreetings((n) => n + 1);
+  };
 
   // Which arm is free to wave, swing and reach: the one not carrying anything. The character's left is +x.
   const carriesLeft = look.carry === "basket";
@@ -231,7 +277,99 @@ function Gardener({
       }
     }
 
-    if (w.mode === "waiting") {
+    // Who's driving, once the intro walk is over: you, their owner over the network, or nobody.
+    const { me } = usePresence.getState();
+    const live = name !== me ? livePose(name, performance.now()) : null;
+    const plants = landPlants(usePlantStore.getState().plants);
+    if (w.mode !== "waiting" && w.mode !== "intro-walk") {
+      const driver: Mode | null = name === me ? "player" : live ? "remote" : null;
+      if (driver && w.mode !== driver) {
+        if (w.mode === "player") player.active = false;
+        w.mode = driver;
+        w.target = null;
+        w.tend = null;
+        w.sinceSent = Infinity;
+      } else if (!driver && (w.mode === "player" || w.mode === "remote")) {
+        // Their owner has gone: carry on pottering about from wherever they were left.
+        if (w.mode === "player") player.active = false;
+        beginWandering(1 + rand() * 2);
+        if (!isWalkable(w.pos.x, w.pos.z, plants)) {
+          w.mode = "walk";
+          w.target = nearestWalkable(w.pos, plants);
+          w.timer = 0;
+          w.waited = 0;
+        }
+      }
+    }
+
+    // Someone on the other device waved at this gardener.
+    const signal = greetSignals.get(name) ?? 0;
+    if (signal !== seenSignal.current) {
+      seenSignal.current = signal;
+      startWave();
+    }
+    w.waving = Math.max(0, w.waving - dt);
+    w.greetTime += dt;
+
+    if (w.mode === "player") {
+      const g = useGardenStore.getState();
+      const canWalk = g.stage === "garden" && !g.activeId && !g.celebrating && !usePlantStore.getState().formOpen;
+      const move = canWalk ? readMove() : { x: 0, y: 0 };
+      const amount = Math.hypot(move.x, move.y);
+      if (amount > 0.12) {
+        // Steer relative to the camera: up is away from it, right is to its right.
+        state.camera.getWorldDirection(scratch);
+        scratch.y = 0;
+        if (scratch.lengthSq() < 1e-6) scratch.set(0, 0, -1);
+        scratch.normalize();
+        const dx = -scratch.z * move.x + scratch.x * move.y;
+        const dz = scratch.x * move.x + scratch.z * move.y;
+        const length = Math.hypot(dx, dz);
+        facing = Math.atan2(dx, dz);
+        // Ease off through a sharp turn rather than sliding sideways.
+        const turned = THREE.MathUtils.clamp(1 - Math.abs(shortestTurn(w.yaw, facing)) / 2.2, 0.25, 1);
+        const step = speed * PLAYER_PACE * Math.min(amount, 1) * turned * dt;
+        const stuck = offGroundBy(w.pos.x, w.pos.z, plants);
+        const canStand = (x: number, z: number) => {
+          const off = offGroundBy(x, z, plants);
+          if (off > 0 && off >= stuck - 1e-6) return false;
+          // Don't walk into the other gardener.
+          if (!other) return true;
+          const near = Math.hypot(other.pos.x - x, other.pos.z - z);
+          return near > 0.5 || near > Math.hypot(other.pos.x - w.pos.x, other.pos.z - w.pos.z);
+        };
+        const sx = (dx / length) * step;
+        const sz = (dz / length) * step;
+        // Straight on if the way is clear, otherwise slide along whatever's in the way.
+        const next = [
+          { x: w.pos.x + sx, z: w.pos.z + sz },
+          { x: w.pos.x + sx, z: w.pos.z },
+          { x: w.pos.x, z: w.pos.z + sz },
+        ].find((p) => canStand(p.x, p.z));
+        if (next) {
+          pace = Math.hypot(next.x - w.pos.x, next.z - w.pos.z) / dt;
+          w.pos = next;
+          w.waving = 0;
+          markWalked();
+          if (hoveredRef.current) setHover(false);
+        }
+      } else if (w.waving > 0) {
+        facing = Math.atan2(state.camera.position.x - w.pos.x, state.camera.position.z - w.pos.z);
+      }
+    } else if (w.mode === "remote" && live) {
+      // Follow their updates. Normally that's step for step; after a gap (say they've just come back)
+      // they hurry over from wherever they'd wandered off to.
+      const dx = live.x - w.pos.x;
+      const dz = live.z - w.pos.z;
+      const distance = Math.hypot(dx, dz);
+      const chase = THREE.MathUtils.clamp(distance * 1.2, speed * 3, 5);
+      const step = Math.min(distance, chase * dt);
+      if (distance > 1e-4) w.pos = { x: w.pos.x + (dx / distance) * step, z: w.pos.z + (dz / distance) * step };
+      w.remotePace = damp(w.remotePace, step / dt, 10, dt);
+      pace = w.remotePace > 0.05 ? w.remotePace : 0;
+      facing = distance > 0.5 ? Math.atan2(dx, dz) : live.yaw;
+      if (pace > 0.3 && hoveredRef.current) setHover(false);
+    } else if (w.mode === "waiting") {
       // Indoors, until the door is most of the way open.
       if (procession.door > 0.8) w.mode = "intro-walk";
     } else if (w.mode === "intro-walk") {
@@ -251,7 +389,6 @@ function Gardener({
       if (w.s >= PROCESSION_LENGTH) beginWandering(0.3 + rand() * 0.6);
     } else if (w.mode === "greet") {
       w.timer -= dt;
-      w.greetTime += dt;
       facing = Math.atan2(state.camera.position.x - w.pos.x, state.camera.position.z - w.pos.z);
       if (w.timer <= 0) {
         w.mode = "idle";
@@ -261,7 +398,6 @@ function Gardener({
       w.timer -= dt;
       if (w.tend) facing = Math.atan2(w.tend.x - w.pos.x, w.tend.z - w.pos.z);
       if (w.timer <= 0) {
-        const plants = landPlants(usePlantStore.getState().plants);
         const claimed = other ? [other.pos, ...(other.target ? [other.target] : [])] : [];
         const plan = planWander(w.pos, claimed, other ? [other.pos] : [], plants, rand);
         if (plan) {
@@ -317,29 +453,49 @@ function Gardener({
     if (w.mode === "waiting" || w.mode === "intro-walk") {
       procession.walkers.set(id, { position: new THREE.Vector3(w.pos.x, w.y, w.pos.z), s: w.s, done: false });
     } else {
-      w.y = groundHeight(w.pos.x, w.pos.z);
+      // A gardener hurrying back across the pond wades rather than sinking.
+      w.y = Math.max(groundHeight(w.pos.x, w.pos.z), WATER_Y - 0.12);
     }
 
-    const turnRate = w.mode === "intro-walk" ? 8 : w.mode === "walk" ? 6 : 3.5;
+    const turnRate = w.mode === "player" ? 10 : w.mode === "intro-walk" || w.mode === "remote" ? 8 : w.mode === "walk" ? 6 : 3.5;
     if (facing !== null) w.yaw += shortestTurn(w.yaw, facing) * (1 - Math.exp(-turnRate * dt));
 
-    // Blend between poses.
+    if (w.mode === "player") {
+      player.active = true;
+      player.moving = pace > 0.05;
+      player.x = w.pos.x;
+      player.y = w.y;
+      player.z = w.pos.z;
+      // Tell the other device: steadily while walking or turning, and now and then while standing so they know you're still here.
+      w.sinceSent += dt;
+      const changed = pace > 0.05 || w.sentPace > 0.05 || Math.abs(shortestTurn(w.sentYaw, w.yaw)) > 0.02;
+      if ((changed && w.sinceSent >= 1 / SEND_RATE) || w.sinceSent >= HEARTBEAT) {
+        const round = (v: number) => Math.round(v * 1000) / 1000;
+        sendPose({ x: round(w.pos.x), z: round(w.pos.z), yaw: round(w.yaw), pace: round(pace), anim: pace > 0.05 ? "walk" : "idle" });
+        w.sinceSent = 0;
+        w.sentPace = pace;
+        w.sentYaw = w.yaw;
+      }
+    }
+
+    // Blend between poses. A quicker pace takes longer strides.
     w.moving = damp(w.moving, pace > 0.01 ? 1 : 0, 8, dt);
     w.tending = damp(w.tending, w.mode === "idle" && w.tend ? 1 : 0, 2.5, dt);
-    w.greeting = damp(w.greeting, w.mode === "greet" ? 1 : 0, 7, dt);
-    w.phase += ((pace * dt) / stride) * Math.PI;
+    w.greeting = damp(w.greeting, w.waving > 0 ? 1 : 0, 7, dt);
+    w.phase += ((pace * dt) / (stride * THREE.MathUtils.clamp(pace / speed, 1, 1.5))) * Math.PI;
     const swing = Math.sin(w.phase) * w.moving;
     const still = 1 - w.moving;
 
-    // Idle: look around now and then, or down at the flower being tended.
+    // Standing about: look around now and then, or down at the flower being tended.
     w.lookTimer -= dt;
     if (w.lookTimer <= 0) {
-      w.lookTarget = w.mode === "idle" && !w.tend ? (rand() - 0.5) * 1.3 : 0;
+      const standing = (w.mode === "idle" && !w.tend) || ((w.mode === "player" || w.mode === "remote") && pace === 0);
+      w.lookTarget = standing ? (rand() - 0.5) * 1.3 : 0;
       w.lookTimer = 1.2 + rand() * 2.5;
     }
-    w.look = damp(w.look, w.mode === "walk" || w.mode === "intro-walk" ? 0 : w.lookTarget, 3, dt);
+    w.look = damp(w.look, pace > 0 ? 0 : w.lookTarget, 3, dt);
 
-    const hop = w.mode === "greet" && w.greetTime < 0.9 ? Math.abs(Math.sin((w.greetTime / 0.45) * Math.PI)) * 0.13 : 0;
+    const hop = w.waving > 0 && w.greetTime < 0.9 ? Math.abs(Math.sin((w.greetTime / 0.45) * Math.PI)) * 0.13 : 0;
     root.current.position.set(w.pos.x, w.y, w.pos.z);
     root.current.rotation.y = w.yaw;
     // Out of sight in the cottage until the door opens.
@@ -396,12 +552,19 @@ function Gardener({
     // Ignore the release at the end of a drag to look around.
     if (!interactive || e.delta > 8) return;
     e.stopPropagation();
-    const w = walker;
-    w.mode = "greet";
-    w.timer = 2.4;
-    w.greetTime = 0;
-    setGreetings((n) => n + 1);
+    startWave();
+    // They wave on the other device too.
+    sendGreet(name);
   };
+
+  useEffect(
+    () => () => {
+      if (walker.mode === "player") player.active = false;
+    },
+    [walker],
+  );
+
+  const note = isMe ? "that's you" : ownerHere ? "here with you now" : profile.note;
 
   return (
     <group ref={root} scale={look.scale}>
@@ -424,7 +587,7 @@ function Gardener({
       </mesh>
       {hovered && interactive && (
         <Html position={[0, 1.45, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
-          <FlowerTag text={profile.name} note={profile.note} />
+          <FlowerTag text={name} note={note} />
         </Html>
       )}
       {greetings > 0 && (

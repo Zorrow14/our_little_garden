@@ -4,6 +4,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 import { type Stage, useGardenStore } from "@/lib/gardenStore";
 import { startMusic } from "@/lib/music";
+import { chooseIdentity, usePresence } from "@/lib/presence";
+import { IdentityChoice } from "./WhoAreYou";
 
 // Revealed left to right like ink going down; the negative insets leave room for the script's flourishes.
 // Hidden must clip past the left overhang too, or a sliver of each line's first letter shows early.
@@ -19,6 +21,14 @@ export default function IntroOverlay() {
   const introSkipped = useGardenStore((s) => s.introSkipped);
   const reducedMotion = useReducedMotion();
   const [written, setWritten] = useState(false);
+  const me = usePresence((s) => s.me);
+  const asking = usePresence((s) => s.identityLoaded && !s.me);
+
+  const begin = () => {
+    // The music has to start inside the click itself, or the browser blocks it.
+    startMusic();
+    enter();
+  };
 
   const write = (delay: number, duration: number) =>
     reducedMotion
@@ -68,18 +78,31 @@ export default function IntroOverlay() {
                 animate={{ opacity: written ? 1 : 0 }}
                 transition={{ duration: 1.2 }}
               >
-                <button
-                  type="button"
-                  onClick={() => {
-                    // The music has to start inside the click itself, or the browser blocks it.
-                    startMusic();
-                    enter();
-                  }}
-                  disabled={!written || !sceneReady}
-                  className="px-6 py-3 text-[1.05rem] tracking-wide text-moon underline decoration-moon/35 underline-offset-[10px] transition-colors hover:decoration-lantern focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lantern disabled:cursor-default disabled:no-underline"
-                >
-                  {sceneReady ? "Enter the garden" : "Planting the last seeds…"}
-                </button>
+                {/* First visit on this device: which of you is it? Picking a name walks straight in. */}
+                {asking && sceneReady ? (
+                  <IdentityChoice disabled={!written} onChosen={begin} />
+                ) : (
+                  <div className="flex flex-col items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={begin}
+                      disabled={!written || !sceneReady}
+                      className="px-6 py-3 text-[1.05rem] tracking-wide text-moon underline decoration-moon/35 underline-offset-[10px] transition-colors hover:decoration-lantern focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lantern disabled:cursor-default disabled:no-underline"
+                    >
+                      {sceneReady ? "Enter the garden" : "Planting the last seeds…"}
+                    </button>
+                    {me && sceneReady && (
+                      <button
+                        type="button"
+                        onClick={() => chooseIdentity(null)}
+                        disabled={!written}
+                        className="px-3 py-1.5 text-[0.85rem] text-moon/55 transition-colors hover:text-moon focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-lantern"
+                      >
+                        Not {me}?
+                      </button>
+                    )}
+                  </div>
+                )}
               </motion.div>
             </div>
           </motion.div>

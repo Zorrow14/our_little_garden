@@ -65,8 +65,18 @@ In the cinematic, the camera flies to the cottage outside the gate, then the doo
 
 - **Shared layout and runtime state:** `lib/procession.ts` holds the cottage and path layout plus the runtime state (`procession`) that the cottage, gardeners and camera coordinate through.
 - **Skipping:** `introSkipped` lives in the store (not in a three-importing module) so the UI can set it without pulling 3D code into the main bundle. Reduced motion skips the procession entirely.
-- **Gardener state machine:** `components/garden/Gardeners.tsx` runs `waiting` → `intro-walk` → `idle` / `walk` / `greet`.
-- **Wandering:** `lib/wander.ts` picks walkable targets, avoiding the pond, flowers, plants and each other.
+- **Gardener state machine:** `components/garden/Gardeners.tsx` runs `waiting` → `intro-walk`, then whichever fits who's driving: `player` (you), `remote` (the other person, live), or `idle` / `walk` / `greet` (the original wander machine, used while nobody drives that gardener).
+- **Wandering:** `lib/wander.ts` picks walkable targets, avoiding the pond, flowers, plants and each other. `offGroundBy` is the looser check for steered gardeners.
+
+### Live garden (Supabase Realtime, `lib/presence.ts`)
+- **Identity:** a device-local choice ("Zorrow" or "Skelly") in localStorage, asked in `IntroOverlay` or `WhoAreYou` (for `?skipintro`). It is not auth.
+- **Channel:** one shared channel, `garden-live`.
+  - **Presence:** tracked as `{ who }` once you're past the title screen.
+  - **Broadcast:** `pose` events (about 12 Hz while moving, a 2 s heartbeat while still) and `greet` events.
+  - **Started once per page:** never torn down, because realtime hands a quick remount the still-closing channel with the same topic.
+- **Replay:** remote poses are timed on the sender's clock, offset by the fastest delivery seen. They're replayed `PLAYBACK_DELAY` behind real time and interpolated (`livePose`).
+- **Going stale:** a gardener whose owner leaves (presence) or goes silent for 8 s (a hidden tab) falls back to wandering. When updates resume, it hurries over to where they are.
+- **Shared per-frame state:** `lib/playerInput.ts` holds plain objects for the keyboard and joystick (`PlayerControls`) and your gardener's position. `CameraRig` reads that position to follow you while you walk.
 
 ### Audio
 - **Music:** `lib/music.ts` streams one `<audio>` element through a Web Audio `GainNode`, because iOS ignores `audio.volume`.

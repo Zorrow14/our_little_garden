@@ -8,9 +8,12 @@ import IntroOverlay from "@/components/ui/IntroOverlay";
 import LetterModal from "@/components/ui/LetterModal";
 import MusicControl from "@/components/ui/MusicControl";
 import PlantPanel from "@/components/ui/PlantPanel";
+import PlayerControls from "@/components/ui/PlayerControls";
+import WhoAreYou from "@/components/ui/WhoAreYou";
 import { STORAGE_KEY, useGardenStore } from "@/lib/gardenStore";
 import { startMusic } from "@/lib/music";
 import { startPlantSync } from "@/lib/plantStore";
+import { startPresence } from "@/lib/presence";
 
 // three.js needs window/WebGL, so the canvas only renders in the browser.
 const GardenCanvas = dynamic(() => import("@/components/garden/GardenCanvas"), {
@@ -55,6 +58,8 @@ export default function GardenExperience() {
 
   // The shared garden: load what's been planted and watch for new plants.
   useEffect(() => startPlantSync(), []);
+  // The live garden: who's here, and where their gardener is.
+  useEffect(() => startPresence(), []);
 
   return (
     <MotionConfig reducedMotion="user">
@@ -63,10 +68,12 @@ export default function GardenExperience() {
           <GardenCanvas />
         </div>
         <GardenHud />
+        <PlayerControls />
         <PlantPanel />
         <MusicControl />
         <LetterModal />
         <IntroOverlay />
+        <WhoAreYou />
       </main>
     </MotionConfig>
   );
