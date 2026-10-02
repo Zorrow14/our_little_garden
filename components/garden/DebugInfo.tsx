@@ -4,7 +4,10 @@ import { Stats } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 import * as THREE from "three";
+import { useGardenStore } from "@/lib/gardenStore";
+import { useNotes } from "@/lib/notes";
 import { player } from "@/lib/playerInput";
+import { usePlantStore } from "@/lib/plantStore";
 import { useZone } from "@/lib/zones";
 import { zoneDefinition, ZONES } from "@/components/zones/registry";
 
@@ -24,6 +27,8 @@ export default function DebugInfo() {
       player,
       zone: () => useZone.getState().zone,
       zones: ZONES,
+      /** The stores, so a test can stage letters, plants or notes in this page only. */
+      stores: { garden: useGardenStore, plants: usePlantStore, notes: useNotes, zone: useZone },
       toScreen,
       /** Where the current zone's exits (doors) are on screen. */
       exitsOnScreen: () => {

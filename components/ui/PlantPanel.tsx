@@ -120,7 +120,20 @@ function PlantDialog() {
   );
 }
 
-function Gate({ titleId, onUnlock, onCancel }: { titleId: string; onUnlock: () => void; onCancel: () => void }) {
+/** Asks for the passcode once per device. Shared by planting and the notes board. */
+export function Gate({
+  titleId,
+  onUnlock,
+  onCancel,
+  title = "The garden gate",
+  prompt = "Whisper our passcode to plant something here.",
+}: {
+  titleId: string;
+  onUnlock: () => void;
+  onCancel: () => void;
+  title?: string;
+  prompt?: string;
+}) {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -147,9 +160,9 @@ function Gate({ titleId, onUnlock, onCancel }: { titleId: string; onUnlock: () =
   return (
     <form onSubmit={submit}>
       <h2 id={titleId} className="pr-8 font-hand text-[clamp(1.6rem,6vw,2rem)] leading-tight">
-        The garden gate
+        {title}
       </h2>
-      <p className="mt-3 text-[0.98rem] leading-relaxed text-ink/75">Whisper our passcode to plant something here.</p>
+      <p className="mt-3 text-[0.98rem] leading-relaxed text-ink/75">{prompt}</p>
       <input
         ref={input}
         type="password"
@@ -301,7 +314,7 @@ function PlantForm({ titleId, onDone }: { titleId: string; onDone: () => void })
   );
 }
 
-const INPUT =
+export const INPUT =
   "mt-1.5 w-full rounded-[3px] border border-ink/20 bg-white/90 px-3.5 py-2.5 text-[1rem] outline-none transition-colors placeholder:text-ink/35 focus:border-rose focus:ring-2 focus:ring-rose/30 disabled:opacity-60";
 
 function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
@@ -371,7 +384,7 @@ function FilePicker({
   );
 }
 
-function PrimaryButton({ children, disabled }: { children: ReactNode; disabled?: boolean }) {
+export function PrimaryButton({ children, disabled }: { children: ReactNode; disabled?: boolean }) {
   return (
     <button
       type="submit"
@@ -383,7 +396,7 @@ function PrimaryButton({ children, disabled }: { children: ReactNode; disabled?:
   );
 }
 
-function GhostButton({ children, onClick, disabled }: { children: ReactNode; onClick: () => void; disabled?: boolean }) {
+export function GhostButton({ children, onClick, disabled }: { children: ReactNode; onClick: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"

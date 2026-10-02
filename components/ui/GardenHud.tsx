@@ -5,6 +5,7 @@ import { type ReactNode, useEffect } from "react";
 import { memories } from "@/data/memories";
 import { bloomedLetterCount, FINAL_ID, LETTER_IDS, useGardenStore } from "@/lib/gardenStore";
 import { usePlantStore } from "@/lib/plantStore";
+import { useKeepsakes } from "@/lib/keepsakes";
 import { usePresence } from "@/lib/presence";
 import { useZone } from "@/lib/zones";
 import FlowerGlyph from "./FlowerGlyph";
@@ -30,7 +31,8 @@ function Walk({ name }: { name: string }) {
 }
 
 export default function GardenHud() {
-  const inGarden = useGardenStore((s) => s.stage === "garden" && !s.activeId);
+  const keepsakeOpen = useKeepsakes((s) => s.open !== null);
+  const inGarden = useGardenStore((s) => s.stage === "garden" && !s.activeId) && !keepsakeOpen;
   const hydrated = useGardenStore((s) => s.hydrated);
   const opened = useGardenStore((s) => s.opened);
   const count = useGardenStore(bloomedLetterCount);
@@ -60,7 +62,7 @@ export default function GardenHud() {
       key: walkHint ? "house-walk" : "house",
       text: (
         <>
-          The door leads back out to the garden
+          <Tap /> the photos, the notes board or the bookshelf
           {walkHint && <span className="block">{walkHint}</span>}
         </>
       ),

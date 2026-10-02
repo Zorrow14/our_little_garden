@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import GardenHud from "@/components/ui/GardenHud";
 import IntroOverlay from "@/components/ui/IntroOverlay";
+import Keepsakes from "@/components/ui/Keepsakes";
 import LetterModal from "@/components/ui/LetterModal";
 import MusicControl from "@/components/ui/MusicControl";
 import PartnerStatus from "@/components/ui/PartnerStatus";
@@ -14,6 +15,7 @@ import WhoAreYou from "@/components/ui/WhoAreYou";
 import ZoneFade from "@/components/ui/ZoneFade";
 import { STORAGE_KEY, useGardenStore } from "@/lib/gardenStore";
 import { startMusic } from "@/lib/music";
+import { startNoteSync } from "@/lib/notes";
 import { startPlantSync } from "@/lib/plantStore";
 import { startPresence } from "@/lib/presence";
 
@@ -62,6 +64,8 @@ export default function GardenExperience() {
   useEffect(() => startPlantSync(), []);
   // The live garden: who's here, and where their gardener is.
   useEffect(() => startPresence(), []);
+  // The notes board inside the cottage.
+  useEffect(() => startNoteSync(), []);
 
   return (
     <MotionConfig reducedMotion="user">
@@ -73,6 +77,7 @@ export default function GardenExperience() {
         <PlayerControls />
         <PlantPanel />
         <MusicControl />
+        <Keepsakes />
         <LetterModal />
         <PartnerStatus />
         <ZoneFade />

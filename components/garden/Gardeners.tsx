@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import FlowerTag from "@/components/ui/FlowerTag";
 import { useGardenStore } from "@/lib/gardenStore";
+import { useKeepsakes } from "@/lib/keepsakes";
 import { player, readMove } from "@/lib/playerInput";
 import { usePlantStore } from "@/lib/plantStore";
 import { type GardenerName, greetSignals, livePose, markWalked, sendGreet, sendPose, usePresence } from "@/lib/presence";
@@ -398,7 +399,7 @@ function Gardener({
 
     if (w.mode === "player") {
       const g = useGardenStore.getState();
-      const canWalk = g.stage === "garden" && !g.activeId && !g.celebrating && !usePlantStore.getState().formOpen && !leaving;
+      const canWalk = g.stage === "garden" && !g.activeId && !g.celebrating && !usePlantStore.getState().formOpen && !leaving && !useKeepsakes.getState().open;
       const move = canWalk ? readMove() : { x: 0, y: 0 };
       const amount = Math.hypot(move.x, move.y);
       if (amount > 0.12) {

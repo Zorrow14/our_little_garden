@@ -7,10 +7,12 @@ import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import FlowerTag from "@/components/ui/FlowerTag";
 import { useGardenStore } from "@/lib/gardenStore";
+import { useKeepsakes } from "@/lib/keepsakes";
 import { FURNITURE, HOUSE_DOOR, HOUSE_WINDOW, ROOM } from "@/lib/house";
 import { player } from "@/lib/playerInput";
 import { getGlowTexture } from "@/lib/textures";
 import { useZone } from "@/lib/zones";
+import { ArchiveShelf, MoonBeam, NotesBoard, PhotoWall, useWindowViewTexture } from "./HouseKeepsakes";
 import { takeExit } from "./registry";
 
 const { halfWidth: W, halfDepth: D, height: H } = ROOM;
@@ -53,6 +55,9 @@ export default function HouseZone() {
       <Room m={m} />
       <Furniture m={m} />
       <HouseDoor m={m} />
+      <PhotoWall />
+      <NotesBoard />
+      <MoonBeam />
       <HouseCamera />
     </>
   );
@@ -192,13 +197,14 @@ function Room({ m }: { m: Materials }) {
 
 function Window({ m }: { m: Materials }) {
   const { x, y, width, height } = HOUSE_WINDOW;
+  const view = useWindowViewTexture();
   const z = -D;
   return (
     <group position={[x, y, z]}>
-      {/* The night outside, and a moon glow on the glass. */}
+      {/* The garden at night outside, and a moon glow on the glass. */}
       <mesh position={[0, 0, -0.02]}>
         <planeGeometry args={[width, height]} />
-        <meshBasicMaterial color="#1d2a5c" />
+        <meshBasicMaterial map={view} />
       </mesh>
       <sprite position={[0.22, 0.15, -0.01]} scale={0.55}>
         <spriteMaterial map={getGlowTexture()} color="#e8ecff" transparent depthWrite={false} blending={THREE.AdditiveBlending} />
@@ -219,6 +225,17 @@ function Window({ m }: { m: Materials }) {
       <mesh material={m.woodLight} position={[0, -height / 2 - 0.08, 0.08]}>
         <boxGeometry args={[width + 0.24, 0.05, 0.18]} />
       </mesh>
+      {/* A little succulent on the sill. */}
+      <group position={[width / 2 - 0.12, -height / 2 - 0.055, 0.1]}>
+        <mesh material={m.terracotta} position-y={0.05}>
+          <cylinderGeometry args={[0.065, 0.05, 0.1, 8]} />
+        </mesh>
+        {[0, 1.25, 2.5, 3.75, 5].map((a, i) => (
+          <mesh key={i} material={i % 2 ? m.leafDark : m.leaf} position={[Math.cos(a) * 0.03, 0.13, Math.sin(a) * 0.03]} rotation={[Math.sin(a) * 0.5, 0, Math.cos(a) * 0.5]}>
+            <coneGeometry args={[0.028, 0.1, 5]} />
+          </mesh>
+        ))}
+      </group>
       {/* Curtains drawn to either side. */}
       {[-1, 1].map((side) => (
         <mesh key={side} material={m.curtain} position={[side * (width / 2 + 0.2), -0.05, 0.08]}>
@@ -346,24 +363,26 @@ function Furniture({ m }: { m: Materials }) {
         ))}
       </group>
 
-      {/* A bookshelf against the back wall. */}
-      <group position={[shelf.x, 0, shelf.z]}>
-        {[0, 0.48, 0.96, 1.44].map((y) => (
-          <mesh key={y} material={m.wood} position={[0, y + 0.13, 0]}>
-            <boxGeometry args={[shelf.halfX * 2, 0.05, shelf.halfZ * 2]} />
-          </mesh>
-        ))}
-        {[-1, 1].map((side) => (
-          <mesh key={side} material={m.wood} position={[side * (shelf.halfX - 0.025), 0.8, 0]}>
-            <boxGeometry args={[0.05, 1.6, shelf.halfZ * 2]} />
-          </mesh>
-        ))}
-        {books.map((b, i) => (
-          <mesh key={i} material={bookMaterials.get(b.color)} position={[b.x, b.y, 0.02]}>
-            <boxGeometry args={[b.w, b.h, shelf.halfZ * 2 - 0.08]} />
-          </mesh>
-        ))}
-      </group>
+      {/* A bookshelf against the back wall, which keeps the letter archive. */}
+      <ArchiveShelf>
+        <group position={[shelf.x, 0, shelf.z]}>
+          {[0, 0.48, 0.96, 1.44].map((y) => (
+            <mesh key={y} material={m.wood} position={[0, y + 0.13, 0]}>
+              <boxGeometry args={[shelf.halfX * 2, 0.05, shelf.halfZ * 2]} />
+            </mesh>
+          ))}
+          {[-1, 1].map((side) => (
+            <mesh key={side} material={m.wood} position={[side * (shelf.halfX - 0.025), 0.8, 0]}>
+              <boxGeometry args={[0.05, 1.6, shelf.halfZ * 2]} />
+            </mesh>
+          ))}
+          {books.map((b, i) => (
+            <mesh key={i} material={bookMaterials.get(b.color)} position={[b.x, b.y, 0.02]}>
+              <boxGeometry args={[b.w, b.h, shelf.halfZ * 2 - 0.08]} />
+            </mesh>
+          ))}
+        </group>
+      </ArchiveShelf>
 
       {/* A standing lamp by the bed. */}
       <group position={[lamp.x, 0, lamp.z]}>
@@ -392,7 +411,9 @@ const DOOR_SWING = 0.5;
 function HouseDoor({ m }: { m: Materials }) {
   const hinge = useRef<THREE.Group>(null!);
   const swing = useRef(0);
-  const interactive = useGardenStore((s) => s.stage === "garden" && !s.activeId && !s.celebrating);
+  const free = useGardenStore((s) => s.stage === "garden" && !s.activeId && !s.celebrating);
+  const panelClosed = useKeepsakes((s) => s.open === null);
+  const interactive = free && panelClosed;
   const [hovered, setHovered] = useState(false);
   useCursor(hovered && interactive);
 

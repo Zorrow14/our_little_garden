@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useGardenStore } from "@/lib/gardenStore";
+import { useKeepsakes } from "@/lib/keepsakes";
 import { playerInput } from "@/lib/playerInput";
 import { usePlantStore } from "@/lib/plantStore";
 import { usePresence } from "@/lib/presence";
@@ -31,7 +32,9 @@ function isTyping(target: EventTarget | null) {
  */
 export default function PlayerControls() {
   const walking = useGardenStore((s) => s.stage === "garden" && !s.activeId && !s.celebrating);
-  const formOpen = usePlantStore((s) => s.formOpen);
+  const plantFormOpen = usePlantStore((s) => s.formOpen);
+  const keepsakeOpen = useKeepsakes((s) => s.open !== null);
+  const formOpen = plantFormOpen || keepsakeOpen;
   const me = usePresence((s) => s.me);
   const [touch, setTouch] = useState(false);
 

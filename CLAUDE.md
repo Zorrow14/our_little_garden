@@ -89,8 +89,14 @@ In the cinematic, the camera flies to the cottage outside the gate, then the doo
   - Garden: the cottage door is the exit. `procession.nearDoor` opens it for any gardener nearby, and the walkable corridor out to it is in `offGroundBy` in `lib/wander.ts`.
   - House: the room lives in `lib/house.ts` (pure layout and walkability) and `components/zones/HouseZone.tsx`. The walls are inward-facing planes, so the near ones disappear from the outside camera.
   - Either way, walking into an exit (after first stepping clear of it) or clicking the door takes it.
+- **Keepsakes in the cottage:** these are clickable room objects in `components/zones/HouseKeepsakes.tsx`, each wrapped in `KeepsakeObject` (a halo, plus a point light and a slight lift on hover).
+  - **Photo wall:** photos from *opened* letters only (`useWallPhotos`).
+  - **Notes board:** the `notes` table, synced like plants by `startNoteSync` in `lib/notes.ts`. It's insert/select only, and uses the same passcode gate as planting.
+  - **Bookshelf:** the letter archive, which lists only letters opened on this device: `gardenStore.opened` plus `plantStore.read`. Re-reading goes through `selectFlower`, and closing the letter returns to the archive (`useKeepsakes.rereading`).
+  - **Panels:** `components/ui/Keepsakes.tsx` holds the panels these open; which one is open is in `lib/keepsakes.ts`. Walking and the joystick pause while one is open.
+- **Music indoors:** `lib/music.ts` follows the zone. Inside, it crossfades to `HOUSE_SRC` if that's set; otherwise it runs the garden track through a lowpass filter at a lower level.
 - **Re-entering the garden remounts its scene.** Anything that animates on mount must remember it already ran (see `grown` in `Plants.tsx`).
-- **`?debug` test helpers:** `window.__garden` exposes `zones`, `player`, `zone()`, `toScreen()` and `exitsOnScreen()`, for driving tests.
+- **`?debug` test helpers:** `window.__garden` exposes `zones`, `player`, `zone()`, `toScreen()`, `exitsOnScreen()` and `stores` (garden, plants, notes, zone), so tests can stage data in the page without touching Supabase.
 
 ### Live garden (Supabase Realtime, `lib/presence.ts`)
 - **Identity:** a device-local choice ("Zorrow" or "Skelly") in localStorage, asked in `IntroOverlay` or `WhoAreYou` (for `?skipintro`). It is not auth.
