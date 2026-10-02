@@ -54,8 +54,12 @@ The first time each device opens the garden, it asks **Who are you? Zorrow / Ske
 
 - **Your own gardener:** you walk it with WASD or the arrow keys. On a phone, use the joystick that appears bottom left. The view follows when you near the edge of the screen.
 - **The other gardener, while they're here:** if the other person has the garden open, their gardener walks wherever they steer it, live on your screen. A note says when they arrive.
-- **The other gardener, while they're away:** it wanders and tends the flowers on its own, as before. When they come back, it hurries over to wherever they are.
+- **The other gardener, while they're away:** it heads home to the cottage and potters about inside. If you see them leave, it walks back down the path and in through the door. When they come back, it reappears wherever they are.
 - **Waving:** tapping either gardener makes it wave on both screens. If they tap yours, you get a "waved at you" note.
+
+**Inside the cottage.** Follow the stepping stones out of the gate to the cottage, then walk into its door or click it to go inside. Inside is a little room with a bed, a table, a bookshelf and a plant. To go back out, walk into the door or click it.
+
+You only see the other person's gardener when you're in the same place. The top-left corner says where they are: "here with you", "in the garden", "in the cottage", or "away". While someone is away, their gardener is at home in the cottage, pottering about.
 
 This runs on a Supabase Realtime channel (`garden-live`):
 - **Presence** says who's online.
@@ -105,5 +109,8 @@ The site is public to anyone with its URL (it's hidden from search engines), so 
 | `components/garden/Gardeners.tsx` | Zorrow and Skelly: their looks, pace, wandering, tending and the wave when tapped, their walk in from the cottage, and walking them yourself or live |
 | `lib/presence.ts`, `lib/playerInput.ts` | The live garden: who you are, who's online, sending and replaying movement; keyboard and joystick input |
 | `components/ui/PlayerControls.tsx`, `components/ui/WhoAreYou.tsx` | WASD/arrow keys and the touch joystick; the "Who are you?" question |
+| `components/zones/registry.ts`, `lib/zones.ts` | The zones (garden, cottage interior): each one's scene, spawn points and exits, and which one is showing |
+| `components/zones/HouseZone.tsx`, `lib/house.ts` | The cottage's interior and its layout |
+| `components/ui/PartnerStatus.tsx`, `components/ui/ZoneFade.tsx` | Where the other person is; the fade when you go through a door |
 | `components/garden/Cottage.tsx`, `lib/procession.ts` | The cottage outside the gate, its path, and the intro's walk and camera shots (runs after "Enter the garden"; there's a Skip intro link) |
 | `components/garden/GardenerBody.tsx`, `lib/wander.ts` | How the gardeners are built from simple shapes, and where they're allowed to walk |

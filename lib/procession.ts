@@ -122,6 +122,8 @@ export const procession = {
   door: 0,
   /** Each gardener's position and progress along the walk, and whether they've reached the garden. */
   walkers: new Map<string, { position: THREE.Vector3; s: number; done: boolean }>(),
+  /** Gardeners standing near the door, any time: it opens for them on their way in or out. */
+  nearDoor: new Set<string>(),
 };
 
 /** Camera poses for the intro: looking at the cottage door, and trailing the gardeners as they reach the gate. */

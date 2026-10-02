@@ -1,7 +1,8 @@
 "use client";
 
-import { useFrame } from "@react-three/fiber";
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { Html, useCursor } from "@react-three/drei";
+import { type ThreeEvent, useFrame } from "@react-three/fiber";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { useGardenStore } from "@/lib/gardenStore";
@@ -9,6 +10,9 @@ import { withCameraFade, withGrowth } from "@/lib/growth";
 import { COTTAGE, OFF_DOORSTEP, PROCESSION, PROCESSION_LENGTH, procession } from "@/lib/procession";
 import { createRandom, groundHeight } from "@/lib/terrain";
 import { getGlowTexture } from "@/lib/textures";
+import { useZone } from "@/lib/zones";
+import FlowerTag from "@/components/ui/FlowerTag";
+import { takeExit } from "@/components/zones/registry";
 
 const { width: W, depth: D, wallHeight: H, doorWidth: DW, doorHeight: DH } = COTTAGE;
 const WALL = 0.09;
@@ -156,7 +160,8 @@ function buildParts(): Part[] {
 
 /**
  * A little cottage just outside the gate, where the gardeners live. Its static
- * pieces are merged into one mesh per material; only the door moves.
+ * pieces are merged into one mesh per material; only the door moves. Walking
+ * up to the door, or clicking it, goes inside (the house zone).
  */
 export default function Cottage() {
   const door = useRef<THREE.Group>(null!);
@@ -164,6 +169,9 @@ export default function Cottage() {
   const lantern = useRef<THREE.SpriteMaterial>(null!);
   /** Linear 0..1 swing progress, eased when applied. */
   const swing = useRef(0);
+  const interactive = useGardenStore((s) => s.stage === "garden" && !s.activeId && !s.celebrating);
+  const [hovered, setHovered] = useState(false);
+  useCursor(hovered && interactive);
 
   const fadeCenter = useMemo(() => ({ value: new THREE.Vector3(COTTAGE.x, COTTAGE.floorY + 1, COTTAGE.z) }), []);
   const materials = useMemo(() => {
@@ -210,12 +218,14 @@ export default function Cottage() {
   }, []);
 
   useFrame((state, delta) => {
-    // Shut the door behind the gardeners once they're both well clear of it.
+    // Shut the door behind the intro walk once everyone's well clear of it.
     const walkers = [...procession.walkers.values()];
-    if (useGardenStore.getState().introSkipped || (walkers.length === 2 && walkers.every((w) => w.s > OFF_DOORSTEP + 1.4))) {
+    if (useGardenStore.getState().introSkipped || (walkers.length > 0 && walkers.every((w) => w.s > OFF_DOORSTEP + 1.4))) {
       procession.doorWanted = false;
     }
-    const target = procession.doorWanted ? 1 : 0;
+    // Afterwards it opens for anyone who comes up to it, and as you step inside.
+    const open = procession.doorWanted || procession.nearDoor.size > 0 || useZone.getState().leaving !== null;
+    const target = open ? 1 : 0;
     swing.current = THREE.MathUtils.clamp(swing.current + Math.sign(target - swing.current) * (delta / DOOR_SWING), 0, 1);
     procession.door = swing.current;
     const eased = swing.current * swing.current * (3 - 2 * swing.current);
@@ -223,6 +233,13 @@ export default function Cottage() {
     spill.current.opacity = 0.55 * eased;
     lantern.current.opacity = 0.55 + Math.sin(state.clock.elapsedTime * 7.3) * 0.04 + Math.sin(state.clock.elapsedTime * 3.1) * 0.05;
   });
+
+  /** Clicking the door goes straight in, as if you'd walked up to it. */
+  const goInside = (e: ThreeEvent<MouseEvent>) => {
+    if (!interactive || e.delta > 8) return;
+    e.stopPropagation();
+    takeExit("garden", "cottage-door");
+  };
 
   return (
     <>
@@ -232,7 +249,17 @@ export default function Cottage() {
         ))}
         {/* The door swings inward on hinges at its left edge. */}
         <group ref={door} position={[-DW / 2, 0, D / 2 - WALL / 2]}>
-          <mesh material={materials.door} position={[DW / 2, DH / 2, 0]}>
+          <mesh
+            material={materials.door}
+            position={[DW / 2, DH / 2, 0]}
+            onPointerOver={(e) => {
+              if (!interactive) return;
+              e.stopPropagation();
+              setHovered(true);
+            }}
+            onPointerOut={() => setHovered(false)}
+            onClick={goInside}
+          >
             <boxGeometry args={[DW - 0.02, DH - 0.01, 0.05]} />
           </mesh>
           <mesh material={materials.brass} position={[DW - 0.1, DH * 0.48, 0.035]}>
@@ -251,6 +278,11 @@ export default function Cottage() {
             blending={THREE.AdditiveBlending}
           />
         </mesh>
+        {hovered && interactive && (
+          <Html position={[0, DH + 0.45, D / 2 + 0.2]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
+            <FlowerTag text="Into the cottage" />
+          </Html>
+        )}
         <sprite position={[DW / 2 + 0.24, 1.2, D / 2 + 0.14]} scale={0.9}>
           <spriteMaterial ref={lantern} map={getGlowTexture()} color={WARM_GLASS} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
         </sprite>

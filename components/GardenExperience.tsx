@@ -7,9 +7,11 @@ import GardenHud from "@/components/ui/GardenHud";
 import IntroOverlay from "@/components/ui/IntroOverlay";
 import LetterModal from "@/components/ui/LetterModal";
 import MusicControl from "@/components/ui/MusicControl";
+import PartnerStatus from "@/components/ui/PartnerStatus";
 import PlantPanel from "@/components/ui/PlantPanel";
 import PlayerControls from "@/components/ui/PlayerControls";
 import WhoAreYou from "@/components/ui/WhoAreYou";
+import ZoneFade from "@/components/ui/ZoneFade";
 import { STORAGE_KEY, useGardenStore } from "@/lib/gardenStore";
 import { startMusic } from "@/lib/music";
 import { startPlantSync } from "@/lib/plantStore";
@@ -72,6 +74,8 @@ export default function GardenExperience() {
         <PlantPanel />
         <MusicControl />
         <LetterModal />
+        <PartnerStatus />
+        <ZoneFade />
         <IntroOverlay />
         <WhoAreYou />
       </main>

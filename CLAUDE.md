@@ -65,17 +65,41 @@ In the cinematic, the camera flies to the cottage outside the gate, then the doo
 
 - **Shared layout and runtime state:** `lib/procession.ts` holds the cottage and path layout plus the runtime state (`procession`) that the cottage, gardeners and camera coordinate through.
 - **Skipping:** `introSkipped` lives in the store (not in a three-importing module) so the UI can set it without pulling 3D code into the main bundle. Reduced motion skips the procession entirely.
-- **Gardener state machine:** `components/garden/Gardeners.tsx` runs `waiting` → `intro-walk`, then whichever fits who's driving: `player` (you), `remote` (the other person, live), or `idle` / `walk` / `greet` (the original wander machine, used while nobody drives that gardener).
+- **Gardener state machine:** `components/garden/Gardeners.tsx` runs `waiting` → `intro-walk` (your own gardener only), then whichever fits who's driving:
+  - `player`: you.
+  - `remote`: the other person, live.
+  - `idle` / `walk` / `greet`: the original wander machine, used while nobody drives that gardener.
+  - `homeward`: walking back to the cottage.
 - **Wandering:** `lib/wander.ts` picks walkable targets, avoiding the pond, flowers, plants and each other. `offGroundBy` is the looser check for steered gardeners.
+
+### Zones (`components/zones/registry.ts`)
+- **The registry:** `ZONES` maps each zone name (`garden`, `house`) to four things:
+  - `Scene`: everything in the zone except the gardeners, including its own camera and `OrbitControls`.
+  - `ground`: height and walkability, plus the wander planner.
+  - `spawns`: arrival points, by entry point.
+  - `exits`: name, position, radius, target zone and target spawn.
+- **Adding a zone:** add its name to `ZONE_NAMES` in `lib/zones.ts`, register it, and add an exit leading to it from an existing zone.
+- **Switching:** happens client-side. `goToZone` sets `leaving`, `ZoneFade` fades to dark, then `arriveInZone` swaps `zone`. `GardenCanvas` renders `<Scene key={zone} />`. `Gardeners` stays mounted outside the zones, so walkers keep their state, and the Realtime channel is untouched.
+- **Each walker has a `zone`:**
+  - You are always in the zone on screen, appearing at the arrival spawn.
+  - A remote gardener follows the zone in their poses.
+  - An unowned gardener lives in `HOME_ZONE` (the cottage). One left in view in the garden walks home through the cottage door first (mode `homeward`).
+  - Only walkers in the active zone are visible or clickable. Invisible meshes still get R3F pointer events, so the handlers check `root.visible`.
+- **Doors:**
+  - Garden: the cottage door is the exit. `procession.nearDoor` opens it for any gardener nearby, and the walkable corridor out to it is in `offGroundBy` in `lib/wander.ts`.
+  - House: the room lives in `lib/house.ts` (pure layout and walkability) and `components/zones/HouseZone.tsx`. The walls are inward-facing planes, so the near ones disappear from the outside camera.
+  - Either way, walking into an exit (after first stepping clear of it) or clicking the door takes it.
+- **Re-entering the garden remounts its scene.** Anything that animates on mount must remember it already ran (see `grown` in `Plants.tsx`).
+- **`?debug` test helpers:** `window.__garden` exposes `zones`, `player`, `zone()`, `toScreen()` and `exitsOnScreen()`, for driving tests.
 
 ### Live garden (Supabase Realtime, `lib/presence.ts`)
 - **Identity:** a device-local choice ("Zorrow" or "Skelly") in localStorage, asked in `IntroOverlay` or `WhoAreYou` (for `?skipintro`). It is not auth.
 - **Channel:** one shared channel, `garden-live`.
-  - **Presence:** tracked as `{ who }` once you're past the title screen.
-  - **Broadcast:** `pose` events (about 12 Hz while moving, a 2 s heartbeat while still) and `greet` events.
+  - **Presence:** tracked as `{ who, zone }` once you're past the title screen, and re-tracked on every zone change. This feeds `PartnerStatus`, the top-left indicator.
+  - **Broadcast:** `pose` events carry `zone` (about 12 Hz while moving or on the intro walk, a 2 s heartbeat while still), plus `greet` events.
   - **Started once per page:** never torn down, because realtime hands a quick remount the still-closing channel with the same topic.
 - **Replay:** remote poses are timed on the sender's clock, offset by the fastest delivery seen. They're replayed `PLAYBACK_DELAY` behind real time and interpolated (`livePose`).
-- **Going stale:** a gardener whose owner leaves (presence) or goes silent for 8 s (a hidden tab) falls back to wandering. When updates resume, it hurries over to where they are.
+- **Going stale:** a gardener whose owner leaves (presence) or goes silent for 8 s (a hidden tab) goes home and wanders there. When updates resume, it hurries over to where they are, or snaps there if it's in another zone.
 - **Shared per-frame state:** `lib/playerInput.ts` holds plain objects for the keyboard and joystick (`PlayerControls`) and your gardener's position. `CameraRig` reads that position to follow you while you walk.
 
 ### Audio
@@ -85,5 +109,5 @@ In the cinematic, the camera flies to the cottage outside the gate, then the doo
 
 ## Constraints
 - **Personal media stays out of git:** `public/images/personal/` and `public/audio/personal/` are gitignored, so Git-based Vercel deploys don't include those files.
-- **Client-only 3D:** three.js only runs client-side. `GardenCanvas` is loaded with `dynamic(..., { ssr: false })`.
+- **Client-only 3D:** three.js only runs client-side. `GardenCanvas` is loaded with `dynamic(..., { ssr: false })`. UI code imports zone names and state from `lib/zones.ts`, never the registry, which pulls in the scenes.
 - **Browser testing on this Windows machine:** puppeteer-core driving Edge with SwiftShader only works when run from PowerShell, not Git Bash.

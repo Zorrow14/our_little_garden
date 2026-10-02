@@ -6,6 +6,7 @@ import { memories } from "@/data/memories";
 import { bloomedLetterCount, FINAL_ID, LETTER_IDS, useGardenStore } from "@/lib/gardenStore";
 import { usePlantStore } from "@/lib/plantStore";
 import { usePresence } from "@/lib/presence";
+import { useZone } from "@/lib/zones";
 import FlowerGlyph from "./FlowerGlyph";
 
 /** "Tap" on touch screens, "Click" with a mouse. */
@@ -38,6 +39,7 @@ export default function GardenHud() {
   const clearNotice = useGardenStore((s) => s.clearNotice);
   const me = usePresence((s) => s.me);
   const walked = usePresence((s) => s.walked);
+  const indoors = useZone((s) => s.zone !== "garden");
 
   useEffect(() => {
     if (!notice) return;
@@ -53,6 +55,16 @@ export default function GardenHud() {
 
   let hint: { key: string; text: ReactNode } | null = null;
   if (notice) hint = { key: "notice", text: notice };
+  else if (indoors)
+    hint = {
+      key: walkHint ? "house-walk" : "house",
+      text: (
+        <>
+          The door leads back out to the garden
+          {walkHint && <span className="block">{walkHint}</span>}
+        </>
+      ),
+    };
   else if (celebrating) hint = { key: "celebrating", text: "Something just bloomed at the end of the path." };
   else if (count === 0 && !finalRead)
     hint = {

@@ -16,6 +16,9 @@ import Flower, { type FlowerStatus } from "./Flower";
 const GROW_TIME = 2.4;
 const FRESH_GROW_TIME = 4.5;
 
+/** Plants that have finished growing in, so stepping back out of the cottage doesn't grow them all over again. */
+const grown = new Set<string>();
+
 /** The shared garden: every letter either of you planted, growing alongside the original seven. */
 export default function Plants() {
   const camera = useThree((s) => s.camera);
@@ -84,11 +87,11 @@ function PlantFlower({
     return { scale: 0.95 + rand() * 0.2, facing: (rand() - 0.5) * 0.4 };
   }, [plant.id]);
 
-  const grow = useRef(0);
+  const grow = useRef(grown.has(plant.id) ? 1 : 0);
   const waited = useRef(0);
   const duration = fresh ? FRESH_GROW_TIME : GROW_TIME;
   /** Held as a closed bud while it grows, then opens. */
-  const [sprouted, setSprouted] = useState(false);
+  const [sprouted, setSprouted] = useState(() => grown.has(plant.id));
 
   useFrame((_, dt) => {
     if (grow.current >= 1) return;
@@ -96,6 +99,7 @@ function PlantFlower({
     if (waited.current < delay) return;
     grow.current = Math.min(1, grow.current + Math.min(dt, 0.1) / duration);
     if (grow.current > 0.55 && !sprouted) setSprouted(true);
+    if (grow.current >= 1) grown.add(plant.id);
   });
 
   useEffect(() => {

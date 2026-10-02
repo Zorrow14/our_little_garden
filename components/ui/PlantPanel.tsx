@@ -8,6 +8,7 @@ import { plantLetter, planting, usePlantStore } from "@/lib/plantStore";
 import { useMusic } from "@/lib/music";
 import { checkPasscode, PLANT_KINDS } from "@/lib/plants";
 import { usePresence } from "@/lib/presence";
+import { useZone } from "@/lib/zones";
 
 /** What the label field starts as, before a flower's suggestion or her own words replace it. */
 const BLANK_LABEL = "Open when ";
@@ -26,7 +27,8 @@ const LABEL_IDEAS = [
 
 /** The "Plant something" button, and the gate and form it opens. */
 export default function PlantPanel() {
-  const visible = useGardenStore((s) => s.hydrated && s.stage === "garden" && !s.activeId && !s.celebrating);
+  const inGarden = useZone((s) => s.zone === "garden" && !s.leaving);
+  const visible = useGardenStore((s) => s.hydrated && s.stage === "garden" && !s.activeId && !s.celebrating) && inGarden;
   const formOpen = usePlantStore((s) => s.formOpen);
   const openForm = usePlantStore((s) => s.openForm);
   // Sits just left of the music button when that's showing.

@@ -10,6 +10,8 @@ import { FINAL_ID, useGardenStore } from "@/lib/gardenStore";
 import { gsap } from "@/lib/gsap";
 import { flowerAnchors } from "@/lib/layout";
 import { player } from "@/lib/playerInput";
+import { useZone } from "@/lib/zones";
+import { ZONES } from "@/components/zones/registry";
 import { GATE, INTRO_SHOTS, PROCESSION_LENGTH, procession } from "@/lib/procession";
 import { groundHeight } from "@/lib/terrain";
 
@@ -44,6 +46,15 @@ function gardenPose(aspect: number): Pose {
 function introShot(position: THREE.Vector3, target: THREE.Vector3, aspect: number): Pose {
   const offset = position.clone().sub(target).multiplyScalar(THREE.MathUtils.lerp(1, portraitPull(aspect), 0.55));
   return { position: target.clone().add(offset), target: target.clone() };
+}
+
+/** Coming out of the cottage: just behind and above the doorstep, looking out along the path. */
+function doorstepPose(aspect: number): Pose {
+  const step = ZONES.garden.spawns["cottage-door"];
+  const target = new THREE.Vector3(step.x, groundHeight(step.x, step.z) + 0.6, step.z);
+  const back = new THREE.Vector3(-Math.sin(step.yaw), 0, -Math.cos(step.yaw));
+  const position = target.clone().addScaledVector(back, 3.2).add(new THREE.Vector3(0, 2.6, 0));
+  return introShot(position, target, aspect);
 }
 
 /** Where the camera looks while trailing the gardeners: their heads, and the gate as they reach it. */
@@ -112,7 +123,9 @@ export default function CameraRig() {
   useLayoutEffect(() => {
     const c = controls.current;
     const inGarden = useGardenStore.getState().stage === "garden";
-    const pose = inGarden ? gardenPose(camera.aspect) : INTRO_POSE;
+    // Back out of the cottage: start on the doorstep, looking down the path toward the garden.
+    const { arrival } = useZone.getState();
+    const pose = inGarden ? (arrival === "cottage-door" ? doorstepPose(camera.aspect) : gardenPose(camera.aspect)) : INTRO_POSE;
     camera.position.copy(pose.position);
     c.target.copy(pose.target);
     camera.lookAt(c.target);

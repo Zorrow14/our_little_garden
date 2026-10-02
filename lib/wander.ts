@@ -1,4 +1,5 @@
 import { distanceToFlowers, FENCE, FLOWER_SPOTS } from "@/lib/layout";
+import { AT_DOOR, OFF_DOORSTEP, onProcession, PROCESSION_LENGTH } from "@/lib/procession";
 import { distanceToPond, POND, WATER_Y } from "@/lib/terrain";
 
 export interface Point {
@@ -72,10 +73,39 @@ const PLAYER_PLANT_CLEARANCE = 0.32;
  */
 export function offGroundBy(x: number, z: number, plants: Point[]) {
   let by = Math.max(0, Math.hypot(x - FENCE.x, z - FENCE.z) - PLAYER_REACH);
+  // Out through the gate, the cottage path is open ground too.
+  if (by > 0) by = Math.min(by, offCottagePathBy(x, z));
   by += Math.max(0, PLAYER_POND_CLEARANCE - distanceToPond(x, z));
   by += Math.max(0, PLAYER_FLOWER_CLEARANCE - distanceToFlowers(x, z));
   for (const p of plants) by += Math.max(0, PLAYER_PLANT_CLEARANCE - Math.hypot(p.x - x, p.z - z));
   return by;
+}
+
+/**
+ * The path from the gate to the cottage door, as points a step apart and how
+ * far either side of each is walkable: narrower at the doorway, so nobody walks
+ * through the cottage walls.
+ */
+const COTTAGE_PATH: (Point & { width: number })[] = [];
+for (let s = AT_DOOR; s <= PROCESSION_LENGTH; s += 0.15) {
+  const p = onProcession(s, 0);
+  COTTAGE_PATH.push({ x: p.x, z: p.z, width: s < OFF_DOORSTEP ? 0.22 : 0.6 });
+}
+
+function offCottagePathBy(x: number, z: number) {
+  let by = Infinity;
+  for (const p of COTTAGE_PATH) by = Math.min(by, Math.max(0, Math.hypot(p.x - x, p.z - z) - p.width));
+  return by;
+}
+
+/** Whether a straight walk from `a` to `b` keeps out of the pond and off the flowers (it may leave the roaming area). */
+export function isOpenPath(a: Point, b: Point, plants: Point[]) {
+  const length = Math.hypot(b.x - a.x, b.z - a.z);
+  for (let d = Math.min(0.3, length); d <= length; d += 0.2) {
+    const t = d / length;
+    if (!isOpenGround(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t, plants)) return false;
+  }
+  return true;
 }
 
 /** Planted flowers growing on land, which gardeners walk around and sometimes tend. */

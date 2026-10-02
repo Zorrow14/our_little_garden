@@ -4,32 +4,20 @@ import { PerformanceMonitor } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { useEffect, useState } from "react";
 import * as THREE from "three";
+import { zoneDefinition } from "@/components/zones/registry";
 import { useGardenStore } from "@/lib/gardenStore";
-import CameraRig from "./CameraRig";
-import Cottage from "./Cottage";
+import { useZone } from "@/lib/zones";
 import DebugInfo from "./DebugInfo";
-import FallingPetals from "./FallingPetals";
-import Fence from "./Fence";
-import Fireflies from "./Fireflies";
-import Flowers from "./Flowers";
 import Gardeners from "./Gardeners";
-import Grass from "./Grass";
-import Ground from "./Ground";
 import GrowthDriver from "./GrowthDriver";
-import Lights from "./Lights";
-import Path from "./Path";
-import Plants from "./Plants";
-import Pond from "./Pond";
-import Rocks from "./Rocks";
-import Sky from "./Sky";
-import Trees from "./Trees";
-import Wildflowers from "./Wildflowers";
 
 // NeutralToneMapping keeps petal pinks and whites truer than R3F's ACES default.
 const GL = { antialias: true, powerPreference: "high-performance", toneMapping: THREE.NeutralToneMapping } as const;
 
 export default function GardenCanvas() {
   const debug = useGardenStore((s) => s.debug);
+  const zone = useZone((s) => s.zone);
+  const { Scene } = zoneDefinition(zone);
   const setQuality = useGardenStore((s) => s.setQuality);
   // Start at a moderate pixel ratio; PerformanceMonitor raises or lowers it to hold the frame rate.
   const [dpr, setDpr] = useState(() => Math.min(1.5, window.devicePixelRatio || 1));
@@ -47,26 +35,11 @@ export default function GardenCanvas() {
         onFallback={degrade}
         flipflops={3}
       />
-      <fog attach="fog" args={["#262a4e", 16, 62]} />
       <SceneReady />
       <GrowthDriver />
-      <Sky />
-      <Lights />
-      <Ground />
-      <Pond />
-      <Rocks />
-      <Path />
-      <Trees />
-      <Fence />
-      <Grass />
-      <Wildflowers />
-      <Flowers />
-      <Plants />
-      <Cottage />
+      {/* The zone on screen. The gardeners live outside it, so they carry on across a switch. */}
+      <Scene key={zone} />
       <Gardeners />
-      <Fireflies />
-      <FallingPetals />
-      <CameraRig />
       {debug && <DebugInfo />}
     </Canvas>
   );

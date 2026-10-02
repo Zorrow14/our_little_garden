@@ -2,12 +2,14 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { create } from "zustand";
 import { useGardenStore } from "@/lib/gardenStore";
 import { supabase } from "@/lib/supabase";
+import { isZone, useZone, ZONE_PLACES, type ZoneName } from "@/lib/zones";
 
 /**
  * The live garden: which of you is at the keyboard, who else is here right
- * now, and where their gardener is walking. One Supabase Realtime channel
- * carries all of it: presence for who's online, broadcast for movement and
- * waves. Nothing here touches the database.
+ * now, which zone they're in, and where their gardener is walking. One
+ * Supabase Realtime channel carries all of it (presence for who's online and
+ * where, broadcast for movement and waves) and stays connected as you move
+ * between zones. Nothing here touches the database.
  */
 
 export const GARDENER_NAMES = ["Zorrow", "Skelly"] as const;
@@ -23,6 +25,8 @@ interface PresenceState {
   identityLoaded: boolean;
   /** Everyone with the garden open right now (yourself included). */
   online: GardenerName[];
+  /** Which zone each of them is in, as they last told presence. */
+  zones: Partial<Record<GardenerName, ZoneName>>;
   /** Set once you've walked a step, which retires the "how to walk" hint. */
   walked: boolean;
 }
@@ -31,6 +35,7 @@ export const usePresence = create<PresenceState>()(() => ({
   me: null,
   identityLoaded: false,
   online: [],
+  zones: {},
   walked: false,
 }));
 
@@ -68,6 +73,8 @@ export interface PoseMessage {
   /** Walking speed in units per second; 0 when standing. */
   pace: number;
   anim: "idle" | "walk";
+  /** The zone they're in. Only gardeners in your own zone are shown moving. */
+  zone: ZoneName;
   /** Sender's clock, in ms. */
   sent: number;
 }
@@ -79,6 +86,7 @@ export interface PoseSnapshot {
   z: number;
   yaw: number;
   pace: number;
+  zone: ZoneName;
 }
 
 interface LiveTrack {
@@ -111,7 +119,7 @@ export function livePose(who: GardenerName, now: number): PoseSnapshot | null {
   while (i > 0 && snapshots[i - 1].at > t) i--;
   const next = snapshots[i];
   const prev = snapshots[i - 1];
-  if (!prev || t >= next.at) return next;
+  if (!prev || t >= next.at || prev.zone !== next.zone) return next;
   if (t <= prev.at) return prev;
   const k = (t - prev.at) / (next.at - prev.at);
   const turn = Math.atan2(Math.sin(next.yaw - prev.yaw), Math.cos(next.yaw - prev.yaw));
@@ -121,16 +129,18 @@ export function livePose(who: GardenerName, now: number): PoseSnapshot | null {
     z: prev.z + (next.z - prev.z) * k,
     yaw: prev.yaw + turn * k,
     pace: prev.pace + (next.pace - prev.pace) * k,
+    zone: next.zone,
   };
 }
 
 let channel: RealtimeChannel | null = null;
 let joined = false;
-let tracked: GardenerName | null = null;
+/** What presence currently says about us, as "name:zone", or null when not tracked. */
+let tracked: string | null = null;
 
 function receivePose(message: PoseMessage) {
   if (!isGardener(message.who) || message.who === usePresence.getState().me) return;
-  if (![message.x, message.z, message.yaw, message.pace, message.sent].every(Number.isFinite)) return;
+  if (![message.x, message.z, message.yaw, message.pace, message.sent].every(Number.isFinite) || !isZone(message.zone)) return;
   const now = performance.now();
   let track = liveTracks.get(message.who);
   // A long silence means a fresh start: don't interpolate from where they were minutes ago.
@@ -144,7 +154,9 @@ function receivePose(message: PoseMessage) {
   const at = message.sent + track.offset;
   const last = track.snapshots[track.snapshots.length - 1];
   if (last && at <= last.at) return;
-  track.snapshots.push({ at, x: message.x, z: message.z, yaw: message.yaw, pace: message.pace });
+  // Through a door into another zone: start afresh there rather than gliding between the two.
+  if (last && last.zone !== message.zone) track.snapshots.length = 0;
+  track.snapshots.push({ at, x: message.x, z: message.z, yaw: message.yaw, pace: message.pace, zone: message.zone });
   if (track.snapshots.length > 20) track.snapshots.shift();
 }
 
@@ -161,8 +173,13 @@ function receiveGreet(payload: { to?: unknown; from?: unknown }) {
 let firstSync = true;
 let waitingHello: GardenerName | null = null;
 
+function hereText(name: GardenerName) {
+  const zone = usePresence.getState().zones[name];
+  return `${name} is ${ZONE_PLACES[zone ?? "garden"]} right now.`;
+}
+
 function sayHello(name: GardenerName, already: boolean) {
-  const text = already ? `${name} is in the garden right now.` : `${name} just came into the garden.`;
+  const text = already ? hereText(name) : `${name} just came into the garden.`;
   if (useGardenStore.getState().stage === "garden") useGardenStore.setState({ notice: text });
   else waitingHello = name;
 }
@@ -170,25 +187,31 @@ function sayHello(name: GardenerName, already: boolean) {
 function receivePresence() {
   if (!channel) return;
   const names = new Set<GardenerName>();
-  for (const metas of Object.values(channel.presenceState<{ who?: unknown }>())) {
-    for (const meta of metas) if (isGardener(meta.who)) names.add(meta.who);
+  const zones: PresenceState["zones"] = {};
+  for (const metas of Object.values(channel.presenceState<{ who?: unknown; zone?: unknown }>())) {
+    for (const meta of metas) {
+      if (!isGardener(meta.who)) continue;
+      names.add(meta.who);
+      if (isZone(meta.zone)) zones[meta.who] = meta.zone;
+    }
   }
   const online = GARDENER_NAMES.filter((n) => names.has(n));
   const { me, online: before } = usePresence.getState();
   const arrived = online.filter((n) => n !== me && !before.includes(n));
-  usePresence.setState({ online });
+  usePresence.setState({ online, zones });
   if (arrived.length > 0) sayHello(arrived[0], firstSync);
   firstSync = false;
 }
 
-/** Shows up as online once you've chosen who you are and stepped past the title screen. */
+/** Shows up as online (and in which zone) once you've chosen who you are and stepped past the title screen. */
 function updateTracking() {
   if (!channel || !joined) return;
   const { me } = usePresence.getState();
-  const want = me && useGardenStore.getState().stage !== "intro" ? me : null;
+  const { zone } = useZone.getState();
+  const want = me && useGardenStore.getState().stage !== "intro" ? `${me}:${zone}` : null;
   if (want === tracked) return;
   tracked = want;
-  void (want ? channel.track({ who: want }) : channel.untrack());
+  void (me && want ? channel.track({ who: me, zone }) : channel.untrack());
 }
 
 /**
@@ -218,13 +241,16 @@ export function startPresence() {
   usePresence.subscribe((s, prev) => {
     if (s.me !== prev.me) updateTracking();
   });
+  useZone.subscribe((s, prev) => {
+    if (s.zone !== prev.zone) updateTracking();
+  });
   useGardenStore.subscribe((s, prev) => {
     if (s.stage === prev.stage) return;
     updateTracking();
     if (s.stage === "garden" && waitingHello) {
       const name = waitingHello;
       waitingHello = null;
-      if (usePresence.getState().online.includes(name)) useGardenStore.setState({ notice: `${name} is in the garden right now.` });
+      if (usePresence.getState().online.includes(name)) useGardenStore.setState({ notice: hereText(name) });
     }
   });
 }

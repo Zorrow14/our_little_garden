@@ -10,10 +10,12 @@ import { useGardenStore } from "@/lib/gardenStore";
 import { player, readMove } from "@/lib/playerInput";
 import { usePlantStore } from "@/lib/plantStore";
 import { type GardenerName, greetSignals, livePose, markWalked, sendGreet, sendPose, usePresence } from "@/lib/presence";
-import { OFF_DOORSTEP, onProcession, PROCESSION_LENGTH, procession } from "@/lib/procession";
-import { createRandom, groundHeight, WATER_Y } from "@/lib/terrain";
+import { AT_DOOR, DOOR, OFF_DOORSTEP, onProcession, PROCESSION_LENGTH, procession } from "@/lib/procession";
+import { createRandom } from "@/lib/terrain";
 import { getGlowTexture } from "@/lib/textures";
-import { isWalkable, landPlants, nearestWalkable, offGroundBy, planWander, type Point } from "@/lib/wander";
+import { isOpenPath, landPlants, type Point } from "@/lib/wander";
+import { goToZone, HOME_ZONE, useZone, type ZoneName } from "@/lib/zones";
+import { zoneDefinition } from "@/components/zones/registry";
 import GardenerBody, { DROPLET_COUNT, type GardenerLook, type GardenerRig } from "./GardenerBody";
 
 interface GardenerProfile {
@@ -83,13 +85,14 @@ const CREW: GardenerProfile[] = [
   },
 ];
 
-/** Where each gardener is and where they're heading, so they can keep out of each other's way. */
-type Whereabouts = Map<string, { pos: Point; target: Point | null }>;
+/** Where each gardener is (and in which zone) and where they're heading, so they can keep out of each other's way. */
+type Whereabouts = Map<string, { zone: ZoneName; pos: Point; target: Point | null }>;
 
 /**
- * Two little gardeners, one for each of you. Yours walks where you steer it;
- * the other follows its owner live while they're here, and wanders the garden
- * and tends its flowers on its own while they're away. Either waves when tapped.
+ * Two little gardeners, one for each of you. Yours walks where you steer it,
+ * between zones too; the other follows its owner live while they're here (shown
+ * only when they're in the same zone as you), and potters about at home in the
+ * cottage while they're away. Either waves when tapped.
  */
 export default function Gardeners() {
   const whereabouts = useMemo<Whereabouts>(() => new Map(), []);
@@ -108,14 +111,17 @@ export default function Gardeners() {
 /**
  * Each gardener's state machine. The intro runs once: `waiting` inside the
  * cottage until the door opens, then `intro-walk` along the scripted path to
- * just inside the gate. After that, who's driving decides:
- * - `player`: the gardener you are, steered from this device.
- * - `remote`: the other gardener while their owner is here, following their updates.
+ * just inside the gate (only your own gardener takes it; the other is wherever
+ * their owner is, or at home). After that, who's driving decides:
+ * - `player`: the gardener you are, steered from this device, in the zone on screen.
+ * - `remote`: the other gardener while their owner is here, following their updates
+ *   in whichever zone they're in.
  * - `idle` / `walk` / `greet`: wandering on their own while nobody is driving them
- *   (their owner is away), pausing to wave when tapped.
+ *   (their owner is away), pausing to wave when tapped. That happens at home
+ *   (`HOME_ZONE`); one left out in the garden walks home first (`homeward`).
  * Waving when tapped also plays over `player` and `remote` without stopping them.
  */
-type Mode = "waiting" | "intro-walk" | "idle" | "walk" | "greet" | "player" | "remote";
+type Mode = "waiting" | "intro-walk" | "idle" | "walk" | "greet" | "player" | "remote" | "homeward";
 
 /** Pace of the walk in from the cottage: an unhurried stroll, a little brisker than wandering. */
 const INTRO_PACE = 0.7;
@@ -131,6 +137,7 @@ const WAVE_TIME = 2.4;
 
 interface Walker {
   mode: Mode;
+  zone: ZoneName;
   pos: Point;
   /** Height of the feet: the ground, or the cottage floor while indoors. */
   y: number;
@@ -159,6 +166,10 @@ interface Walker {
   sinceSent: number;
   sentPace: number;
   sentYaw: number;
+  /** The way home, a point at a time, while `homeward`. */
+  route: Point[];
+  /** False until you've stepped clear of the exit you arrived by, so it doesn't send you straight back. */
+  armed: boolean;
   look: number;
   lookTarget: number;
   lookTimer: number;
@@ -199,15 +210,26 @@ function Gardener({
   const seenSignal = useRef(greetSignals.get(name) ?? 0);
   useCursor(hovered && interactive);
 
+  /** Where this gardener potters about at home while their owner is away. */
+  const homeSpot = useMemo(() => {
+    const home = zoneDefinition(HOME_ZONE);
+    return home.ground.nearestWalkable({ x: home.spawns.home.x + profile.intro.side * 2, z: home.spawns.home.z }, []);
+  }, [profile.intro.side]);
+
   const [walker] = useState<Walker>(() => {
-    // Straight into the garden (e.g. ?skipintro): start wandering from their usual spots.
-    const intro = useGardenStore.getState().stage !== "garden";
+    // The other person's gardener starts at home; yours comes out of the cottage on the intro
+    // walk, or with ?skipintro starts from their usual spot in the garden.
+    const { me } = usePresence.getState();
+    const atHome = me !== null && me !== name;
+    const intro = !atHome && useGardenStore.getState().stage !== "garden";
     const inside = onProcession(profile.intro.head, 0);
-    const start = nearestWalkable(profile.start, []);
+    const start = zoneDefinition("garden").ground.nearestWalkable(profile.start, []);
+    const pos = atHome ? homeSpot : intro ? { x: inside.x, z: inside.z } : start;
     return {
       mode: intro ? "waiting" : "idle",
-      pos: intro ? { x: inside.x, z: inside.z } : start,
-      y: intro ? inside.y : groundHeight(start.x, start.z),
+      zone: atHome ? HOME_ZONE : "garden",
+      pos,
+      y: intro ? inside.y : zoneDefinition(atHome ? HOME_ZONE : "garden").ground.height(pos.x, pos.z),
       s: profile.intro.head,
       yaw: intro ? inside.heading : rand() * Math.PI * 2,
       target: null,
@@ -224,6 +246,8 @@ function Gardener({
       sinceSent: Infinity,
       sentPace: 0,
       sentYaw: 0,
+      route: [],
+      armed: false,
       look: 0,
       lookTarget: 0,
       lookTimer: 0,
@@ -250,7 +274,8 @@ function Gardener({
     const dt = Math.min(delta, 0.1);
     const t = state.clock.elapsedTime;
     const w = walker;
-    const other = [...whereabouts.entries()].find(([key]) => key !== id)?.[1];
+    const { zone: activeZone, arrival, leaving } = useZone.getState();
+    const plants = landPlants(usePlantStore.getState().plants);
 
     let pace = 0;
     let facing: number | null = null;
@@ -264,13 +289,53 @@ function Gardener({
       procession.walkers.set(id, { position: new THREE.Vector3(w.pos.x, w.y, w.pos.z), s: w.s, done: true });
     };
 
+    /** Appear at a zone's spawn point: arriving through a door, or put straight there. */
+    const placeAt = (zone: ZoneName, spawn: string | null) => {
+      const def = zoneDefinition(zone);
+      const at = (spawn && def.spawns[spawn]) || (zone === HOME_ZONE ? { ...homeSpot, yaw: def.spawns.home?.yaw ?? 0 } : null);
+      const pos = at ?? def.ground.nearestWalkable(profile.start, plants);
+      w.zone = zone;
+      w.pos = { x: pos.x, z: pos.z };
+      if (at) w.yaw = at.yaw;
+      w.target = null;
+      w.tend = null;
+      w.route = [];
+      w.armed = false;
+      w.remotePace = 0;
+    };
+
+    /** Nobody's driving: off home. Out of sight that's instant; in view, they walk back to the cottage. */
+    const goHome = () => {
+      if (w.mode === "player") player.active = false;
+      if (w.zone === "garden" && activeZone === "garden") {
+        const gate = onProcession(PROCESSION_LENGTH, 0);
+        let route: Point[] | null = isOpenPath(w.pos, gate, plants) ? [gate] : null;
+        const garden = zoneDefinition("garden").ground;
+        for (let i = 0; i < 40 && !route; i++) {
+          const via = { x: (rand() * 2 - 1) * 9, z: (rand() * 2 - 1) * 9 - 0.8 };
+          if (garden.isWalkable(via.x, via.z, plants) && isOpenPath(w.pos, via, plants) && isOpenPath(via, gate, plants)) route = [via, gate];
+        }
+        if (route) {
+          for (let s = PROCESSION_LENGTH - 0.4; s > AT_DOOR; s -= 0.4) route.push(onProcession(s, 0));
+          route.push(DOOR);
+          w.mode = "homeward";
+          w.route = route;
+          w.target = null;
+          w.tend = null;
+          return;
+        }
+      }
+      placeAt(HOME_ZONE, null);
+      beginWandering(1 + rand() * 2);
+    };
+
     if (w.mode === "waiting" || w.mode === "intro-walk") {
       const { stage, introSkipped } = useGardenStore.getState();
       if (introSkipped || stage === "garden") {
         // Skipped: appear just inside the gate. Opened straight into the garden: their usual spot.
         const cameThrough = introSkipped || procession.door > 0;
         const end = onProcession(PROCESSION_LENGTH, profile.intro.side);
-        w.pos = cameThrough ? { x: end.x, z: end.z } : nearestWalkable(profile.start, []);
+        w.pos = cameThrough ? { x: end.x, z: end.z } : zoneDefinition("garden").ground.nearestWalkable(profile.start, []);
         if (cameThrough) w.yaw = end.heading;
         w.s = PROCESSION_LENGTH;
         beginWandering(0.4 + rand() * 0.8);
@@ -280,7 +345,12 @@ function Gardener({
     // Who's driving, once the intro walk is over: you, their owner over the network, or nobody.
     const { me } = usePresence.getState();
     const live = name !== me ? livePose(name, performance.now()) : null;
-    const plants = landPlants(usePlantStore.getState().plants);
+    if ((w.mode === "waiting" || w.mode === "intro-walk") && me && name !== me) {
+      // Only your own gardener walks out of the cottage with you.
+      placeAt(HOME_ZONE, null);
+      beginWandering(1 + rand() * 2);
+      procession.walkers.delete(id);
+    }
     if (w.mode !== "waiting" && w.mode !== "intro-walk") {
       const driver: Mode | null = name === me ? "player" : live ? "remote" : null;
       if (driver && w.mode !== driver) {
@@ -288,19 +358,34 @@ function Gardener({
         w.mode = driver;
         w.target = null;
         w.tend = null;
+        w.route = [];
         w.sinceSent = Infinity;
-      } else if (!driver && (w.mode === "player" || w.mode === "remote")) {
-        // Their owner has gone: carry on pottering about from wherever they were left.
-        if (w.mode === "player") player.active = false;
-        beginWandering(1 + rand() * 2);
-        if (!isWalkable(w.pos.x, w.pos.z, plants)) {
-          w.mode = "walk";
-          w.target = nearestWalkable(w.pos, plants);
-          w.timer = 0;
-          w.waited = 0;
+      } else if (!driver && w.mode !== "homeward" && (w.mode === "player" || w.mode === "remote" || w.zone !== HOME_ZONE)) {
+        // Their owner has gone: home, to carry on pottering about there.
+        if (w.zone === HOME_ZONE) {
+          if (w.mode === "player") player.active = false;
+          beginWandering(1 + rand() * 2);
+          const home = zoneDefinition(w.zone).ground;
+          if (!home.isWalkable(w.pos.x, w.pos.z, plants)) {
+            w.mode = "walk";
+            w.target = home.nearestWalkable(w.pos, plants);
+            w.timer = 0;
+            w.waited = 0;
+          }
+        } else {
+          goHome();
         }
       }
+      // You came through a door: appear on its other side. They went through one: appear where they are now.
+      if (w.mode === "player" && w.zone !== activeZone) placeAt(activeZone, arrival);
+      if (w.mode === "remote" && live && live.zone !== w.zone) {
+        placeAt(live.zone, null);
+        w.pos = { x: live.x, z: live.z };
+        w.yaw = live.yaw;
+      }
     }
+    const ground = zoneDefinition(w.zone).ground;
+    const other = [...whereabouts.entries()].find(([key, o]) => key !== id && o.zone === w.zone)?.[1];
 
     // Someone on the other device waved at this gardener.
     const signal = greetSignals.get(name) ?? 0;
@@ -313,7 +398,7 @@ function Gardener({
 
     if (w.mode === "player") {
       const g = useGardenStore.getState();
-      const canWalk = g.stage === "garden" && !g.activeId && !g.celebrating && !usePlantStore.getState().formOpen;
+      const canWalk = g.stage === "garden" && !g.activeId && !g.celebrating && !usePlantStore.getState().formOpen && !leaving;
       const move = canWalk ? readMove() : { x: 0, y: 0 };
       const amount = Math.hypot(move.x, move.y);
       if (amount > 0.12) {
@@ -329,9 +414,9 @@ function Gardener({
         // Ease off through a sharp turn rather than sliding sideways.
         const turned = THREE.MathUtils.clamp(1 - Math.abs(shortestTurn(w.yaw, facing)) / 2.2, 0.25, 1);
         const step = speed * PLAYER_PACE * Math.min(amount, 1) * turned * dt;
-        const stuck = offGroundBy(w.pos.x, w.pos.z, plants);
+        const stuck = ground.offGroundBy(w.pos.x, w.pos.z, plants);
         const canStand = (x: number, z: number) => {
-          const off = offGroundBy(x, z, plants);
+          const off = ground.offGroundBy(x, z, plants);
           if (off > 0 && off >= stuck - 1e-6) return false;
           // Don't walk into the other gardener.
           if (!other) return true;
@@ -355,6 +440,35 @@ function Gardener({
         }
       } else if (w.waving > 0) {
         facing = Math.atan2(state.camera.position.x - w.pos.x, state.camera.position.z - w.pos.z);
+      }
+      // Walked into a doorway: through to the zone beyond.
+      const exit = zoneDefinition(w.zone).exits.find((e) => Math.hypot(e.at.x - w.pos.x, e.at.z - w.pos.z) < e.radius);
+      if (!exit) w.armed = true;
+      else if (w.armed && pace > 0 && !leaving) {
+        w.armed = false;
+        goToZone(exit.to, exit.spawn);
+      }
+    } else if (w.mode === "homeward") {
+      // Back along the path to the cottage, and in through the door.
+      const next = w.route[0];
+      const dx = next.x - w.pos.x;
+      const dz = next.z - w.pos.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance < 0.08) {
+        w.route.shift();
+        if (w.route.length === 0) {
+          placeAt(HOME_ZONE, "front-door");
+          w.mode = "walk";
+          w.target = homeSpot;
+          w.timer = 0;
+          w.waited = 0;
+        }
+      } else {
+        facing = Math.atan2(dx, dz);
+        const turnedToward = THREE.MathUtils.clamp(1 - Math.abs(shortestTurn(w.yaw, facing)) / 1.4, 0.2, 1);
+        pace = speed * 1.3 * turnedToward;
+        const step = Math.min(pace * dt, distance);
+        w.pos = { x: w.pos.x + (dx / distance) * step, z: w.pos.z + (dz / distance) * step };
       }
     } else if (w.mode === "remote" && live) {
       // Follow their updates. Normally that's step for step; after a gap (say they've just come back)
@@ -399,7 +513,7 @@ function Gardener({
       if (w.tend) facing = Math.atan2(w.tend.x - w.pos.x, w.tend.z - w.pos.z);
       if (w.timer <= 0) {
         const claimed = other ? [other.pos, ...(other.target ? [other.target] : [])] : [];
-        const plan = planWander(w.pos, claimed, other ? [other.pos] : [], plants, rand);
+        const plan = ground.planWander(w.pos, claimed, other ? [other.pos] : [], plants, rand);
         if (plan) {
           // The scene only notices the pointer leaving when the mouse moves, so drop the tag as they walk off.
           if (hoveredRef.current) setHover(false);
@@ -449,15 +563,18 @@ function Gardener({
         }
       }
     }
-    whereabouts.set(id, { pos: w.pos, target: w.target });
+    whereabouts.set(id, { zone: w.zone, pos: w.pos, target: w.target });
     if (w.mode === "waiting" || w.mode === "intro-walk") {
       procession.walkers.set(id, { position: new THREE.Vector3(w.pos.x, w.y, w.pos.z), s: w.s, done: false });
     } else {
-      // A gardener hurrying back across the pond wades rather than sinking.
-      w.y = Math.max(groundHeight(w.pos.x, w.pos.z), WATER_Y - 0.12);
+      w.y = zoneDefinition(w.zone).ground.height(w.pos.x, w.pos.z);
     }
+    // Anyone coming up to the cottage door (you, them, or a gardener heading home) has it opened for them.
+    if (w.zone === "garden" && w.mode !== "waiting" && Math.hypot(w.pos.x - DOOR.x, w.pos.z - DOOR.z) < 1.3) procession.nearDoor.add(id);
+    else procession.nearDoor.delete(id);
 
-    const turnRate = w.mode === "player" ? 10 : w.mode === "intro-walk" || w.mode === "remote" ? 8 : w.mode === "walk" ? 6 : 3.5;
+    const turnRate =
+      w.mode === "player" ? 10 : w.mode === "intro-walk" || w.mode === "remote" ? 8 : w.mode === "walk" || w.mode === "homeward" ? 6 : 3.5;
     if (facing !== null) w.yaw += shortestTurn(w.yaw, facing) * (1 - Math.exp(-turnRate * dt));
 
     if (w.mode === "player") {
@@ -466,12 +583,21 @@ function Gardener({
       player.x = w.pos.x;
       player.y = w.y;
       player.z = w.pos.z;
+    }
+    if (name === me && (w.mode === "player" || w.mode === "intro-walk")) {
       // Tell the other device: steadily while walking or turning, and now and then while standing so they know you're still here.
       w.sinceSent += dt;
       const changed = pace > 0.05 || w.sentPace > 0.05 || Math.abs(shortestTurn(w.sentYaw, w.yaw)) > 0.02;
       if ((changed && w.sinceSent >= 1 / SEND_RATE) || w.sinceSent >= HEARTBEAT) {
         const round = (v: number) => Math.round(v * 1000) / 1000;
-        sendPose({ x: round(w.pos.x), z: round(w.pos.z), yaw: round(w.yaw), pace: round(pace), anim: pace > 0.05 ? "walk" : "idle" });
+        sendPose({
+          x: round(w.pos.x),
+          z: round(w.pos.z),
+          yaw: round(w.yaw),
+          pace: round(pace),
+          anim: pace > 0.05 ? "walk" : "idle",
+          zone: w.zone,
+        });
         w.sinceSent = 0;
         w.sentPace = pace;
         w.sentYaw = w.yaw;
@@ -498,8 +624,10 @@ function Gardener({
     const hop = w.waving > 0 && w.greetTime < 0.9 ? Math.abs(Math.sin((w.greetTime / 0.45) * Math.PI)) * 0.13 : 0;
     root.current.position.set(w.pos.x, w.y, w.pos.z);
     root.current.rotation.y = w.yaw;
-    // Out of sight in the cottage until the door opens.
-    root.current.visible = w.mode !== "waiting" || procession.door > 0.05;
+    // Only in the zone on screen; and out of sight in the cottage until the door opens.
+    const visible = w.zone === activeZone && (w.mode !== "waiting" || procession.door > 0.05);
+    root.current.visible = visible;
+    if (!visible && hoveredRef.current) setHover(false);
     fadeCenter.value.set(w.pos.x, w.y + 0.6, w.pos.z);
 
     if (!rig.bounce) return;
@@ -550,7 +678,7 @@ function Gardener({
 
   const greet = (e: ThreeEvent<MouseEvent>) => {
     // Ignore the release at the end of a drag to look around.
-    if (!interactive || e.delta > 8) return;
+    if (!interactive || e.delta > 8 || !root.current.visible) return;
     e.stopPropagation();
     startWave();
     // They wave on the other device too.
@@ -576,7 +704,7 @@ function Gardener({
         visible={false}
         position-y={0.6}
         onPointerOver={(e) => {
-          if (!interactive) return;
+          if (!interactive || !root.current.visible) return;
           e.stopPropagation();
           setHover(true);
         }}
