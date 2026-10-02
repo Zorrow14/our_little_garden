@@ -6,9 +6,13 @@ import { useEffect } from "react";
 import * as THREE from "three";
 import { useGardenStore } from "@/lib/gardenStore";
 import { useHousePhotos } from "@/lib/housePhotos";
+import { useKeepsakes } from "@/lib/keepsakes";
+import { useMail } from "@/lib/mailbox";
 import { useNotes } from "@/lib/notes";
 import { player } from "@/lib/playerInput";
 import { usePlantStore } from "@/lib/plantStore";
+import { SEATS, seated, seatRequest } from "@/lib/props";
+import { night, useStargazing } from "@/lib/stargazing";
 import { useZone } from "@/lib/zones";
 import { zoneDefinition, ZONES } from "@/components/zones/registry";
 
@@ -29,7 +33,21 @@ export default function DebugInfo() {
       zone: () => useZone.getState().zone,
       zones: ZONES,
       /** The stores, so a test can stage letters, plants or notes in this page only. */
-      stores: { garden: useGardenStore, plants: usePlantStore, notes: useNotes, housePhotos: useHousePhotos, zone: useZone },
+      stores: {
+        garden: useGardenStore,
+        plants: usePlantStore,
+        notes: useNotes,
+        housePhotos: useHousePhotos,
+        zone: useZone,
+        mail: useMail,
+        keepsakes: useKeepsakes,
+        stargazing: useStargazing,
+      },
+      /** The garden's seats, who's sitting where, and how far night has fallen for stargazing. */
+      seats: SEATS,
+      seated,
+      seatRequest,
+      night,
       toScreen,
       /** Where the current zone's exits (doors) are on screen. */
       exitsOnScreen: () => {

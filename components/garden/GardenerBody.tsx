@@ -35,6 +35,8 @@ export interface GardenerRig {
   spout?: THREE.Object3D;
   /** Droplets falling from the spout while watering, positioned in the gardener's own space. */
   water?: THREE.Group;
+  /** A petite build's skirt, which gathers up a little when they sit. */
+  skirt?: THREE.Mesh;
 }
 
 export const DROPLET_COUNT = 5;
@@ -44,6 +46,14 @@ const BUILDS = {
   lean: { hipY: 0.355, hipX: 0.075, legR: 0.052, legLen: 0.28, shoe: [0.1, 0.07, 0.17], shoulderY: 0.36, shoulderX: 0.175, sleeveR: 0.052, armR: 0.034, armLen: 0.22, headR: 0.19, headY: 0.65 },
   petite: { hipY: 0.315, hipX: 0.065, legR: 0.045, legLen: 0.25, shoe: [0.085, 0.06, 0.14], shoulderY: 0.31, shoulderX: 0.15, sleeveR: 0.046, armR: 0.03, armLen: 0.2, headR: 0.19, headY: 0.59 },
 } as const;
+
+/**
+ * How far below a seat's top a sitting gardener's feet-level origin goes: their
+ * hips rest just above the seat (a skirt needs a little more room than trousers).
+ */
+export function seatDrop(look: GardenerLook) {
+  return (BUILDS[look.build].hipY - (look.build === "petite" ? 0.09 : 0.05)) * look.scale;
+}
 
 const BASKET_FLOWERS = [
   { color: "#f49ab6", at: [0.03, 0.02] },
@@ -219,7 +229,13 @@ export default function GardenerBody({
             </>
           ) : (
             <>
-              <mesh material={m.bottom} position-y={-0.05}>
+              <mesh
+                ref={(mesh) => {
+                  if (mesh) rig.skirt = mesh;
+                }}
+                material={m.bottom}
+                position-y={-0.05}
+              >
                 <cylinderGeometry args={[0.115, 0.21, 0.25, 9]} />
               </mesh>
               <mesh material={m.top} position-y={0.17} scale={[1, 1, 0.8]}>

@@ -8,12 +8,13 @@ import { usePlantStore } from "@/lib/plantStore";
 import { plantKind } from "@/lib/plants";
 
 /**
- * The keepsakes inside the cottage: the photo wall, the notes board and the
- * letter archive on the bookshelf. Each opens a panel when clicked; this file
- * says which one is open, and gathers the letters and photos they show.
+ * The keepsakes inside the cottage (the photo wall, the notes board and the
+ * letter archive on the bookshelf) and the mailbox out by the garden gate. Each
+ * opens a panel when clicked; this file says which one is open, and gathers the
+ * letters and photos they show.
  */
 
-export type Keepsake = "photos" | "notes" | "archive";
+export type Keepsake = "photos" | "notes" | "archive" | "mailbox";
 
 interface KeepsakeState {
   open: Keepsake | null;

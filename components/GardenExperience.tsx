@@ -15,6 +15,7 @@ import WhoAreYou from "@/components/ui/WhoAreYou";
 import ZoneFade from "@/components/ui/ZoneFade";
 import { STORAGE_KEY, useGardenStore } from "@/lib/gardenStore";
 import { startHousePhotoSync } from "@/lib/housePhotos";
+import { startMailSync } from "@/lib/mailbox";
 import { startMusic } from "@/lib/music";
 import { startNoteSync } from "@/lib/notes";
 import { startPlantSync } from "@/lib/plantStore";
@@ -69,6 +70,8 @@ export default function GardenExperience() {
   useEffect(() => startNoteSync(), []);
   // Photos hung on the cottage's photo wall.
   useEffect(() => startHousePhotoSync(), []);
+  // Letters in the mailbox by the gate.
+  useEffect(() => startMailSync(), []);
 
   return (
     <MotionConfig reducedMotion="user">

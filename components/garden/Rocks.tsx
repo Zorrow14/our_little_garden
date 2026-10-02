@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { withGrowth } from "@/lib/growth";
 import { distanceToFlowers, distanceToPath } from "@/lib/layout";
+import { distanceToProps, onHilltop } from "@/lib/props";
 import { createRandom, distanceToPond, groundHeight, POND } from "@/lib/terrain";
 
 const ROCK_COLORS = ["#77716a", "#837c73", "#6b675f", "#7c7770"].map((c) => new THREE.Color(c));
@@ -22,12 +23,13 @@ export default function Rocks() {
     const list: Rock[] = [];
     const color = () => ROCK_COLORS[Math.floor(rand() * ROCK_COLORS.length)];
 
-    // Stones around the pond, leaving the side that faces the camera open so the lotus stays in view.
+    // Stones around the pond, leaving the side that faces the camera open so the lotus stays in view, and a gap for the dock.
     for (let i = 0; i < 28; i++) {
       const a = (i / 28) * Math.PI * 2 + rand() * 0.12;
       if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) < 0.6) continue;
       const r = POND.radius * (0.92 + rand() * 0.12);
-      list.push({ x: POND.x + Math.sin(a) * r, z: POND.z + Math.cos(a) * r, size: 0.16 + rand() * 0.2, spin: rand() * 6, color: color() });
+      const rock = { x: POND.x + Math.sin(a) * r, z: POND.z + Math.cos(a) * r, size: 0.16 + rand() * 0.2, spin: rand() * 6, color: color() };
+      if (distanceToProps(rock.x, rock.z) > 0.3) list.push(rock);
     }
 
     // A scattering through the rest of the garden.
@@ -38,6 +40,7 @@ export default function Rocks() {
       const x = Math.cos(a) * r;
       const z = Math.sin(a) * r - 1;
       if (distanceToPond(x, z) < POND.radius * 1.25 || distanceToPath(x, z) < 0.7 || distanceToFlowers(x, z) < 0.9) continue;
+      if (distanceToProps(x, z) < 0.6 || onHilltop(x, z, 0.5)) continue;
       list.push({ x, z, size: 0.1 + rand() * rand() * 0.45, spin: rand() * 6, color: color() });
       placed++;
     }

@@ -6,6 +6,8 @@ import * as THREE from "three";
 import { useGardenStore } from "@/lib/gardenStore";
 import { garden, SATURATION_GLSL, sharedUniforms } from "@/lib/growth";
 import { distanceToFlowers, distanceToPath } from "@/lib/layout";
+import { distanceToProps } from "@/lib/props";
+import { night } from "@/lib/stargazing";
 import { createRandom, distanceToPond, groundHeight, POND } from "@/lib/terrain";
 
 const CLUMPS = 820;
@@ -94,6 +96,8 @@ export default function Grass() {
       const cx = Math.cos(a) * r;
       const cz = Math.sin(a) * r - 0.5;
       if (distanceToPond(cx, cz) < POND.radius * 1.02 || distanceToPath(cx, cz) < 0.5 || distanceToFlowers(cx, cz) < 0.35) continue;
+      // Not up through the dock's boards.
+      if (distanceToProps(cx, cz) < 0.15) continue;
       const tint = 0.75 + rand() * 0.45;
       for (let b = 0; b < BLADES_PER_CLUMP && count < MAX_BLADES; b++) {
         const x = cx + (rand() - 0.5) * 0.45;
@@ -143,7 +147,7 @@ export default function Grass() {
   }, [quality, blades]);
 
   useFrame(() => {
-    material.uniforms.uBrightness.value = 0.72 + 0.3 * garden.growth;
+    material.uniforms.uBrightness.value = (0.72 + 0.3 * garden.growth) * (1 - 0.35 * night.amount);
   });
 
   useEffect(

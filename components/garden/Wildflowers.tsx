@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { useGardenStore } from "@/lib/gardenStore";
 import { garden } from "@/lib/growth";
 import { distanceToFlowers, distanceToPath } from "@/lib/layout";
+import { distanceToProps, onHilltop } from "@/lib/props";
 import { createRandom, distanceToPond, groundHeight, POND, smoothstep } from "@/lib/terrain";
 
 const COUNT = 300;
@@ -57,6 +58,7 @@ export default function Wildflowers() {
       const x = Math.cos(a) * r;
       const z = Math.sin(a) * r - 0.8;
       if (distanceToPond(x, z) < POND.radius * 1.1 || distanceToPath(x, z) < 0.45 || distanceToFlowers(x, z) < 0.6) continue;
+      if (distanceToProps(x, z) < 0.3 || onHilltop(x, z, 0.3)) continue;
       const i = list.length;
       list.push({
         x,

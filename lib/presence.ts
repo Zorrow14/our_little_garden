@@ -8,8 +8,9 @@ import { isZone, useZone, ZONE_PLACES, type ZoneName } from "@/lib/zones";
  * The live garden: which of you is at the keyboard, who else is here right
  * now, which zone they're in, and where their gardener is walking. One
  * Supabase Realtime channel carries all of it (presence for who's online and
- * where, broadcast for movement and waves) and stays connected as you move
- * between zones. Nothing here touches the database.
+ * where, broadcast for movement, sitting, waves, and a nudge when a letter is
+ * posted) and stays connected as you move between zones. Nothing here touches
+ * the database.
  */
 
 export const GARDENER_NAMES = ["Zorrow", "Skelly"] as const;
@@ -72,7 +73,9 @@ export interface PoseMessage {
   yaw: number;
   /** Walking speed in units per second; 0 when standing. */
   pace: number;
-  anim: "idle" | "walk";
+  anim: "idle" | "walk" | "sit";
+  /** The seat they're sitting on (see `lib/props`), while sitting. */
+  seat?: string;
   /** The zone they're in. Only gardeners in your own zone are shown moving. */
   zone: ZoneName;
   /** Sender's clock, in ms. */
@@ -87,6 +90,7 @@ export interface PoseSnapshot {
   yaw: number;
   pace: number;
   zone: ZoneName;
+  seat: string | null;
 }
 
 interface LiveTrack {
@@ -130,6 +134,7 @@ export function livePose(who: GardenerName, now: number): PoseSnapshot | null {
     yaw: prev.yaw + turn * k,
     pace: prev.pace + (next.pace - prev.pace) * k,
     zone: next.zone,
+    seat: next.seat,
   };
 }
 
@@ -156,7 +161,8 @@ function receivePose(message: PoseMessage) {
   if (last && at <= last.at) return;
   // Through a door into another zone: start afresh there rather than gliding between the two.
   if (last && last.zone !== message.zone) track.snapshots.length = 0;
-  track.snapshots.push({ at, x: message.x, z: message.z, yaw: message.yaw, pace: message.pace, zone: message.zone });
+  const seat = message.anim === "sit" && typeof message.seat === "string" ? message.seat.slice(0, 24) : null;
+  track.snapshots.push({ at, x: message.x, z: message.z, yaw: message.yaw, pace: message.pace, zone: message.zone, seat });
   if (track.snapshots.length > 20) track.snapshots.shift();
 }
 
@@ -167,6 +173,16 @@ function receiveGreet(payload: { to?: unknown; from?: unknown }) {
   if (payload.to === me && isGardener(payload.from) && payload.from !== me) {
     useGardenStore.setState({ notice: `${payload.from} waved at you.` });
   }
+}
+
+/** Called when the other person posts a letter, so the mailbox can check what's on its way. */
+const mailListeners = new Set<() => void>();
+
+export function onMailNudge(listener: () => void) {
+  mailListeners.add(listener);
+  return () => {
+    mailListeners.delete(listener);
+  };
 }
 
 /** Announces arrivals: "is here" when you walk in to find them, "just came in" when they arrive after you. */
@@ -229,6 +245,7 @@ export function startPresence() {
     .on("presence", { event: "sync" }, receivePresence)
     .on("broadcast", { event: "pose" }, ({ payload }) => receivePose(payload as PoseMessage))
     .on("broadcast", { event: "greet" }, ({ payload }) => receiveGreet(payload as { to?: unknown; from?: unknown }))
+    .on("broadcast", { event: "mail" }, () => mailListeners.forEach((listener) => listener()))
     .subscribe((status) => {
       joined = status === "SUBSCRIBED";
       if (joined) {
@@ -266,4 +283,10 @@ export function sendPose(pose: Omit<PoseMessage, "who" | "sent">) {
 export function sendGreet(to: GardenerName) {
   if (!channel || !joined) return;
   void channel.send({ type: "broadcast", event: "greet", payload: { to, from: usePresence.getState().me } });
+}
+
+/** Tells the other device a letter was just posted. It holds nothing: they fetch what's on its way themselves. */
+export function sendMailNudge() {
+  if (!channel || !joined) return;
+  void channel.send({ type: "broadcast", event: "mail", payload: {} });
 }

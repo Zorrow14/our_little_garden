@@ -6,6 +6,7 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { garden, SATURATION_GLSL, sharedUniforms } from "@/lib/growth";
 import { MOON_DIRECTION } from "@/lib/layout";
+import { night } from "@/lib/stargazing";
 import { getGlowTexture } from "@/lib/textures";
 
 /** [growth 0, growth 1]: a quiet blue hour that warms toward violet dusk as the garden fills in. */
@@ -13,6 +14,12 @@ const PALETTE = {
   top: [new THREE.Color("#060a1c"), new THREE.Color("#0b0f30")],
   horizon: [new THREE.Color("#262a4e"), new THREE.Color("#4b3b6e")],
   below: [new THREE.Color("#0b1020"), new THREE.Color("#151435")],
+};
+/** Deep night, for stargazing from the hill. */
+const MIDNIGHT = {
+  top: new THREE.Color("#010208"),
+  horizon: new THREE.Color("#0d1030"),
+  below: new THREE.Color("#04060f"),
 };
 
 const vertexShader = /* glsl */ `
@@ -67,6 +74,11 @@ export default function Sky() {
     u.uTop.value.lerpColors(PALETTE.top[0], PALETTE.top[1], g);
     u.uHorizon.value.lerpColors(PALETTE.horizon[0], PALETTE.horizon[1], g);
     u.uBelow.value.lerpColors(PALETTE.below[0], PALETTE.below[1], g);
+    if (night.amount > 0) {
+      u.uTop.value.lerp(MIDNIGHT.top, night.amount);
+      u.uHorizon.value.lerp(MIDNIGHT.horizon, night.amount);
+      u.uBelow.value.lerp(MIDNIGHT.below, night.amount);
+    }
     // Fog fades distant hills into the horizon colour, so the two must match.
     if (scene.fog) scene.fog.color.copy(u.uHorizon.value);
   });

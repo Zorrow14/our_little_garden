@@ -10,10 +10,12 @@ import { FINAL_ID, useGardenStore } from "@/lib/gardenStore";
 import { gsap } from "@/lib/gsap";
 import { flowerAnchors } from "@/lib/layout";
 import { player } from "@/lib/playerInput";
+import { STARGAZE } from "@/lib/props";
+import { useStargazing } from "@/lib/stargazing";
 import { useZone } from "@/lib/zones";
 import { ZONES } from "@/components/zones/registry";
 import { GATE, INTRO_SHOTS, PROCESSION_LENGTH, procession } from "@/lib/procession";
-import { groundHeight } from "@/lib/terrain";
+import { groundHeight, HILL } from "@/lib/terrain";
 
 interface Pose {
   position: THREE.Vector3;
@@ -57,6 +59,15 @@ function doorstepPose(aspect: number): Pose {
   return introShot(position, target, aspect);
 }
 
+/** Stargazing: low on the hill's flank, tipped up past its top at the sky, with whoever's on the hill along the bottom. */
+function stargazePose(aspect: number): Pose {
+  const top = groundHeight(HILL.x, HILL.z);
+  const { camera, look } = STARGAZE;
+  const position = new THREE.Vector3(camera.x, top + 0.5, camera.z);
+  const target = new THREE.Vector3(HILL.x + look.x * 2.5, top + 2.3, HILL.z + look.z * 2.5);
+  return introShot(position, target, aspect);
+}
+
 /** Where the camera looks while trailing the gardeners: their heads, and the gate as they reach it. */
 const LOOK_ABOVE_FEET = new THREE.Vector3(0, 0.75, 0);
 const GATE_TARGET = new THREE.Vector3(GATE.x, groundHeight(GATE.x, GATE.z) + 0.75, GATE.z);
@@ -84,12 +95,15 @@ export default function CameraRig() {
   const stage = useGardenStore((s) => s.stage);
   const activeId = useGardenStore((s) => s.activeId);
   const celebrating = useGardenStore((s) => s.celebrating);
+  const stars = useStargazing((s) => s.on);
   const reducedMotion = useReducedMotion() ?? false;
 
   const aspectRef = useRef(aspect);
   aspectRef.current = aspect;
   /** Where the camera was before it flew to a flower, so closing the letter can return there. */
   const beforeFocus = useRef<Pose | null>(null);
+  /** Where it was before tipping up to the stars. */
+  const beforeStars = useRef<Pose | null>(null);
   const flight = useRef<gsap.core.Timeline | null>(null);
   const introPhase = useRef<"reveal" | "follow" | "settle" | "done">("done");
   const focus = useMemo(() => new THREE.Vector3(), []);
@@ -258,6 +272,24 @@ export default function CameraRig() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, celebrating, stage]);
 
+  // Up to the stars when they come out; back down when they go, to the old angle but wherever you've walked to.
+  useEffect(() => {
+    if (stage !== "garden" || introPhase.current !== "done") return;
+    const c = controls.current;
+    if (stars) {
+      beforeStars.current ??= { position: camera.position.clone(), target: c.target.clone() };
+      flyTo(stargazePose(aspectRef.current), 2.6, release);
+      return;
+    }
+    const back = beforeStars.current;
+    if (!back) return;
+    beforeStars.current = null;
+    const target = player.active ? new THREE.Vector3(player.x, groundHeight(player.x, player.z) + 0.3, player.z) : back.target;
+    flyTo({ position: target.clone().add(back.position.clone().sub(back.target)), target }, 2, release);
+    // flyTo and release only read refs and stable values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stars]);
+
   const pull = portraitPull(aspect);
   return (
     <OrbitControls
@@ -272,7 +304,8 @@ export default function CameraRig() {
       // A little past the starting view.
       maxDistance={14.5 * pull}
       minPolarAngle={0.5}
-      maxPolarAngle={1.32}
+      // Stargazing, the view may tip up past level to look at the sky.
+      maxPolarAngle={stars ? 1.85 : 1.32}
     />
   );
 }

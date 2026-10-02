@@ -13,10 +13,14 @@ export function distanceToPond(x: number, z: number) {
   return Math.hypot(x - POND.x, z - POND.z);
 }
 
-/** Terrain height: gently rolling ground, a basin for the pond, and hills around the rim. */
+/** A small grassy mound in the quiet back corner of the garden, for watching the stars from. */
+export const HILL = { x: 7.0, z: -4.8, radius: 2.4, height: 0.6 } as const;
+
+/** Terrain height: gently rolling ground, a basin for the pond, the stargazing hill, and hills around the rim. */
 export function groundHeight(x: number, z: number) {
   let h = Math.sin(x * 0.33 + 1.3) * 0.1 + Math.cos(z * 0.29 - x * 0.12) * 0.12;
   h += smoothstep(12, 26, Math.hypot(x, z)) * 4;
+  h += smoothstep(HILL.radius, HILL.radius * 0.15, Math.hypot(x - HILL.x, z - HILL.z)) * HILL.height;
   const basin = 1 - smoothstep(0.55, 1.1, distanceToPond(x, z) / POND.radius);
   return h + (-0.5 - h) * basin;
 }

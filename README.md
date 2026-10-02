@@ -64,13 +64,26 @@ The cottage keeps three things you can click. Each glows softly when you hover o
 - **The corkboard by the door:** short notes either of you can pin (after the same passcode as planting). They appear on the other person's board straight away. Notes are stored in the Supabase table `notes`. To take one down, delete its row in the dashboard (Table Editor → notes).
 - **The bookshelf:** every letter you've already opened, to read again without walking back to its flower. Letters you haven't opened in the garden yet never show up here.
 
+**Around the garden.** There are four more places to spend time. Each glows faintly and shows a tag when you hover over it.
+- **The swing:** under the old tree on the left. Walk over and click it to sit down; walking, or clicking it again, gets you up. There's room for two. When you're both sitting on it (or on the two benches at the end of the dock), little hearts float up between you. The other person sees you sit, too.
+- **The dock:** out into the pond from its left bank, with two benches at the end looking at the lotus. It sits you down the same way as the swing.
+- **The mailbox:** just inside the gate.
+  - **Writing:** click it to write the other person a letter (after the passcode) and choose when it opens: in 1 day, 3 days or a week.
+  - **While it's on its way:** the letter can't be read by anyone, not even through the database's public API. The mailbox raises its flag, and the recipient only sees "something's coming… soon" (or "in a few days").
+  - **When it arrives:** they get a "You've got mail!" note in the garden, and an envelope peeks out of the mailbox until they open it. The sender can see when it's been opened.
+  - **Where letters are kept:** in the Supabase table `mailbox`. To remove one, delete its row in the dashboard (Table Editor → mailbox).
+- **The stargazing hill:** the grassy mound in the back right corner, with a picnic blanket on top.
+  - **To stargaze:** walk up onto it, or click it from anywhere. The dusk deepens into full night, the sky fills with stars (and the odd shooting star), and the view tips up to look at them.
+  - **To come back:** walk off the hill (or, if you clicked it, take a step).
+  - **What it touches:** only your own screen; nothing is stored.
+
 Inside, the music softens as if heard through the walls. To use a separate cottage track instead, put it in `public/audio/` and set `HOUSE_SRC` in `lib/music.ts`.
 
 You only see the other person's gardener when you're in the same place. The top-left corner says where they are: "here with you", "in the garden", "in the cottage", or "away". While someone is away, their gardener is at home in the cottage, pottering about.
 
 This runs on a Supabase Realtime channel (`garden-live`):
 - **Presence** says who's online.
-- **Broadcast** carries movement, about 12 updates a second while walking, plus waves.
+- **Broadcast** carries movement (about 12 updates a second while walking) and sitting, plus waves and a nudge when a letter is posted.
 
 Nothing is stored. There's no login: the name is just a choice on each device.
 
@@ -122,4 +135,6 @@ The site is public to anyone with its URL (it's hidden from search engines), so 
 | `lib/keepsakes.ts`, `lib/notes.ts`, `lib/housePhotos.ts` | Which keepsake panel is open, opened letters and the photo wall's photos; the shared notes board; photos hung in the cottage |
 | `components/ui/PartnerStatus.tsx`, `components/ui/ZoneFade.tsx` | Where the other person is; the fade when you go through a door |
 | `components/garden/Cottage.tsx`, `lib/procession.ts` | The cottage outside the gate, its path, and the intro's walk and camera shots (runs after "Enter the garden"; there's a Skip intro link) |
+| `lib/props.ts`, `components/garden/props/` | The swing, dock, mailbox and stargazing hill: where they stand, sitting on them, and the starry night |
+| `lib/mailbox.ts`, `components/ui/MailboxPanel.tsx`, `lib/stargazing.ts` | Delayed letters in the mailbox; when the stars are out |
 | `components/garden/GardenerBody.tsx`, `lib/wander.ts` | How the gardeners are built from simple shapes, and where they're allowed to walk |

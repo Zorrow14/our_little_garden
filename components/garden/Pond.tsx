@@ -69,7 +69,7 @@ const LILY_PADS = [
   { x: -0.9, z: 3.3, size: 0.28, spin: 2.1 },
   { x: 1.5, z: 3.1, size: 0.3, spin: 4.0 },
   { x: 1.6, z: 1.2, size: 0.24, spin: 5.2 },
-  { x: -1.8, z: 2.4, size: 0.22, spin: 1.1 },
+  { x: -1.75, z: 1.6, size: 0.22, spin: 1.1 },
   { x: 0.9, z: 0.6, size: 0.2, spin: 3.3 },
 ];
 

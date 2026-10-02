@@ -5,8 +5,9 @@ import { type ReactNode, useEffect } from "react";
 import { memories } from "@/data/memories";
 import { bloomedLetterCount, FINAL_ID, LETTER_IDS, useGardenStore } from "@/lib/gardenStore";
 import { usePlantStore } from "@/lib/plantStore";
-import { useKeepsakes } from "@/lib/keepsakes";
+import { openKeepsake, useKeepsakes } from "@/lib/keepsakes";
 import { usePresence } from "@/lib/presence";
+import { useStargazing } from "@/lib/stargazing";
 import { useZone } from "@/lib/zones";
 import FlowerGlyph from "./FlowerGlyph";
 
@@ -42,6 +43,7 @@ export default function GardenHud() {
   const me = usePresence((s) => s.me);
   const walked = usePresence((s) => s.walked);
   const indoors = useZone((s) => s.zone !== "garden");
+  const stars = useStargazing((s) => s.by);
 
   useEffect(() => {
     if (!notice) return;
@@ -66,6 +68,11 @@ export default function GardenHud() {
           {walkHint && <span className="block">{walkHint}</span>}
         </>
       ),
+    };
+  else if (stars)
+    hint = {
+      key: `stars-${stars}`,
+      text: stars === "hill" ? "A clear night for stargazing. Walk off the hill to come back." : "A clear night for stargazing. Take a step to come back.",
     };
   else if (celebrating) hint = { key: "celebrating", text: "Something just bloomed at the end of the path." };
   else if (count === 0 && !finalRead)
@@ -172,6 +179,15 @@ function LetterIndex({ finalUnlocked }: { finalUnlocked: boolean }) {
             </button>
           </li>
         ))}
+        <li>
+          <button
+            type="button"
+            onClick={() => openKeepsake("mailbox")}
+            className="w-full rounded-sm px-3 py-1.5 text-left font-hand text-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose"
+          >
+            The mailbox
+          </button>
+        </li>
       </ul>
     </nav>
   );

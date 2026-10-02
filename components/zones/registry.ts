@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import { HOUSE_DOOR, houseIsWalkable, houseNearestWalkable, houseOffGroundBy, housePlanWander } from "@/lib/house";
 import { COTTAGE, DOOR, OFF_DOORSTEP, onProcession, PROCESSION_LENGTH } from "@/lib/procession";
+import { deckHeight } from "@/lib/props";
 import { groundHeight, WATER_Y } from "@/lib/terrain";
 import { isWalkable, nearestWalkable, offGroundBy, planWander, type Point, type WanderPlan } from "@/lib/wander";
 import { goToZone, type ZoneName } from "@/lib/zones";
@@ -43,8 +44,10 @@ export interface ZoneDefinition {
   exits: ExitPoint[];
 }
 
-/** The cottage floor sits above the slope it's built on; out on the grass, a gardener crossing the pond wades. */
+/** The cottage floor sits above the slope it's built on, the dock above the water; out on the grass, a gardener crossing the pond wades. */
 function gardenHeight(x: number, z: number) {
+  const deck = deckHeight(x, z);
+  if (deck !== null) return Math.max(deck, groundHeight(x, z));
   const c = Math.cos(COTTAGE.yaw);
   const s = Math.sin(COTTAGE.yaw);
   const lx = (x - COTTAGE.x) * c - (z - COTTAGE.z) * s;

@@ -16,8 +16,17 @@ import Rocks from "@/components/garden/Rocks";
 import Sky from "@/components/garden/Sky";
 import Trees from "@/components/garden/Trees";
 import Wildflowers from "@/components/garden/Wildflowers";
+import Dock from "@/components/garden/props/Dock";
+import Mailbox from "@/components/garden/props/Mailbox";
+import { PropHoverLight } from "@/components/garden/props/shared";
+import StargazingHill from "@/components/garden/props/StargazingHill";
+import Swing from "@/components/garden/props/Swing";
+import TogetherCue from "@/components/garden/props/TogetherCue";
 
-/** The garden zone: the night garden inside its fence, and the cottage outside the gate. */
+/**
+ * The garden zone: the night garden inside its fence, with its swing, dock,
+ * mailbox and stargazing hill, and the cottage outside the gate.
+ */
 export default function GardenZone() {
   return (
     <>
@@ -34,6 +43,12 @@ export default function GardenZone() {
       <Wildflowers />
       <Flowers />
       <Plants />
+      <Swing />
+      <Dock />
+      <Mailbox />
+      <StargazingHill />
+      <TogetherCue />
+      <PropHoverLight />
       <Cottage />
       <Fireflies />
       <FallingPetals />

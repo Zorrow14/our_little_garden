@@ -99,13 +99,51 @@ In the cinematic, the camera flies to the cottage outside the gate, then the doo
   - **Panels:** `components/ui/Keepsakes.tsx` holds the panels these open; which one is open is in `lib/keepsakes.ts`. Walking and the joystick pause while one is open.
 - **Music indoors:** `lib/music.ts` follows the zone. Inside, it crossfades to `HOUSE_SRC` if that's set; otherwise it runs the garden track through a lowpass filter at a lower level.
 - **Re-entering the garden remounts its scene.** Anything that animates on mount must remember it already ran (see `grown` in `Plants.tsx`).
-- **`?debug` test helpers:** `window.__garden` exposes `zones`, `player`, `zone()`, `toScreen()`, `exitsOnScreen()` and `stores` (garden, plants, notes, housePhotos, zone), so tests can stage data in the page without touching Supabase.
+- **`?debug` test helpers:** `window.__garden` exposes:
+  - `zones`, `player`, `zone()`, `toScreen()`, `exitsOnScreen()`;
+  - `stores`: garden, plants, notes, housePhotos, zone, mail, keepsakes and stargazing;
+  - `seats`, `seated`, `seatRequest` and `night`.
+
+  Tests can stage data in the page without touching Supabase. Never post real mailbox letters from a test: they'd be delivered to the other person.
+
+### Garden props (`lib/props.ts`, `components/garden/props/`)
+- **Layout:** `lib/props.ts` is pure layout plus a little runtime state. The swing (and the extra tree it hangs from), the dock and the mailbox each have a `Frame` (origin plus yaw, local +z is the front), like the cottage. The stargazing `HILL` lives in `lib/terrain.ts`, because it's part of `groundHeight`.
+- **Spacing:** `distanceToProps` and `onHilltop` keep grass, wildflowers, rocks, wandering (`isOpenGround`) and new plants (`choosePlantSpot`) clear of the props. `OBSTACLES` are solid for walking (`offGroundBy`). The dock is walkable over the water (`onDockWalk`), and `deckHeight` raises gardeners onto its boards (`gardenHeight` in the registry).
+- **Sitting:** `SEATS` holds two seats on the swing and one on each dock bench.
+  - **Taking a seat:** clicking a seat prop sets `seatRequest`, which your gardener takes up in `player` mode if you're within `SIT_REACH`. Movement or a second click gets them up.
+  - **Not a mode:** sitting is layered over `player` and `remote` (`Walker.seat`, `sitT`).
+  - **Sync:** poses carry `anim: "sit"` and `seat`. `seated` maps names to seats every frame.
+  - **Together:** `TogetherCue` floats hearts when both of you are on the same prop. The swing's sway is `swingMotion.angle`, which `seatPose` follows.
+- **Clicks:** props use `PropHover` (a breathing glow pool, a paper tag, and a hover light). There's a single hover light, `PropHoverLight`, moved to whichever prop is hovered, because every point light costs every lit material in the garden.
+- **Stargazing:** this is local only, and `lib/stargazing.ts` holds its state. Standing on the hilltop, or clicking the hill, eases `night.amount` toward 1, which:
+  - dims `Lights` and the grass;
+  - darkens `Sky` toward midnight;
+  - fades in `Starfield` (stars, a Milky Way and shooting stars).
+
+  `CameraRig` then flies to `stargazePose` (the view in `STARGAZE`, turned so the trees round the edge don't fill the sky) and allows looking up past level. Walking off, or setting off after a click, flies back.
+- **Mailbox:** see below. The 3D box (`props/Mailbox.tsx`) shows its flag while anything's on its way, a twinkle when it's coming to you, and an envelope and glow once a letter has arrived for you. Its panel is the `mailbox` keepsake (`components/ui/MailboxPanel.tsx`).
+
+### Mailbox (`lib/mailbox.ts`, Supabase table `mailbox`)
+- **What it is:** delayed letters to the other person. The sender picks 1 day, 3 days or 1 week, and `deliver_at` is computed when the letter is posted. The recipient is always the other name (`recipientOf`). `author` must be Zorrow or Skelly.
+- **Enforced in the database:** RLS only lets a row be selected once `deliver_at <= now()`. Inserts must start `delivered = false`. The only update allowed is setting `delivered = true` on an arrived letter; there's a column-level grant on `delivered` only.
+- **What's on its way:** `mailbox_pending()` (security definer, granted to anon) returns just `id, author, deliver_at` for letters still on their way. The advisor flags it, and that's intended. The UI shows the recipient only a vague "soon" or "in a few days" (`arrivalHint`), never the exact time.
+- **Posting:** an insert can't return the row (it isn't selectable yet), so `postLetter` inserts without `.select()`. It then broadcasts a `mail` nudge on `garden-live` so the other device refetches.
+- **Sync:** `startMailSync` refetches:
+  - on load, focus and nudges;
+  - every 5 minutes;
+  - just after the next letter is due;
+  - on realtime changes, for `delivered` updates.
+
+  It announces "You've got mail" once per letter per visit, while you're in the garden and not reading. Opening a letter marks it `delivered`.
 
 ### Live garden (Supabase Realtime, `lib/presence.ts`)
 - **Identity:** a device-local choice ("Zorrow" or "Skelly") in localStorage, asked in `IntroOverlay` or `WhoAreYou` (for `?skipintro`). It is not auth.
 - **Channel:** one shared channel, `garden-live`.
   - **Presence:** tracked as `{ who, zone }` once you're past the title screen, and re-tracked on every zone change. This feeds `PartnerStatus`, the top-left indicator.
-  - **Broadcast:** `pose` events carry `zone` (about 12 Hz while moving or on the intro walk, a 2 s heartbeat while still), plus `greet` events.
+  - **Broadcast:** these events go out:
+    - `pose` events carry `zone` and, while sitting, `seat`. They're sent about 12 times a second while moving or on the intro walk, and as a 2 s heartbeat while still.
+    - `greet` events, for waves.
+    - `mail` nudges, when a letter is posted.
   - **Started once per page:** never torn down, because realtime hands a quick remount the still-closing channel with the same topic.
 - **Replay:** remote poses are timed on the sender's clock, offset by the fastest delivery seen. They're replayed `PLAYBACK_DELAY` behind real time and interpolated (`livePose`).
 - **Going stale:** a gardener whose owner leaves (presence) or goes silent for 8 s (a hidden tab) goes home and wanders there. When updates resume, it hurries over to where they are, or snaps there if it's in another zone.

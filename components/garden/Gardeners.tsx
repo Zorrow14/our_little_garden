@@ -12,12 +12,13 @@ import { player, readMove } from "@/lib/playerInput";
 import { usePlantStore } from "@/lib/plantStore";
 import { type GardenerName, greetSignals, livePose, markWalked, sendGreet, sendPose, usePresence } from "@/lib/presence";
 import { AT_DOOR, DOOR, OFF_DOORSTEP, onProcession, PROCESSION_LENGTH, procession } from "@/lib/procession";
+import { type Seat, type SeatProp, seatById, seated, seatPose, seatRequest, SEATS, SIT_REACH, sittingTogether } from "@/lib/props";
 import { createRandom } from "@/lib/terrain";
 import { getGlowTexture } from "@/lib/textures";
 import { isOpenPath, landPlants, type Point } from "@/lib/wander";
 import { goToZone, HOME_ZONE, useZone, type ZoneName } from "@/lib/zones";
 import { zoneDefinition } from "@/components/zones/registry";
-import GardenerBody, { DROPLET_COUNT, type GardenerLook, type GardenerRig } from "./GardenerBody";
+import GardenerBody, { DROPLET_COUNT, type GardenerLook, type GardenerRig, seatDrop } from "./GardenerBody";
 
 interface GardenerProfile {
   id: string;
@@ -121,6 +122,10 @@ export default function Gardeners() {
  *   (their owner is away), pausing to wave when tapped. That happens at home
  *   (`HOME_ZONE`); one left out in the garden walks home first (`homeward`).
  * Waving when tapped also plays over `player` and `remote` without stopping them.
+ *
+ * Either of you can sit on the swing or a bench on the dock (`seat`): your own
+ * gardener when you click it while near enough, theirs when they do. Sitting
+ * isn't a mode of its own; it's layered over `player` and `remote`.
  */
 type Mode = "waiting" | "intro-walk" | "idle" | "walk" | "greet" | "player" | "remote" | "homeward";
 
@@ -135,6 +140,11 @@ const SEND_RATE = 12;
 const HEARTBEAT = 2;
 /** How long a wave lasts. */
 const WAVE_TIME = 2.4;
+/** Seconds to hop up onto a seat, or down off it. */
+const SIT_TIME = 0.5;
+
+const ease = (t: number) => t * t * (3 - 2 * t);
+const PROP_PLACES: Record<SeatProp, string> = { swing: "the swing", dock: "the end of the dock" };
 
 interface Walker {
   mode: Mode;
@@ -171,6 +181,16 @@ interface Walker {
   route: Point[];
   /** False until you've stepped clear of the exit you arrived by, so it doesn't send you straight back. */
   armed: boolean;
+  /** The seat they're on, or getting onto or off; null while on their feet. */
+  seat: Seat | null;
+  /** 1 while sitting down or sat, 0 while getting up. */
+  sitWant: 0 | 1;
+  /** 0 standing .. 1 sat, linear. */
+  sitT: number;
+  /** Where they stood before sitting, or will stand after getting up. */
+  sitFrom: Point;
+  /** The seat the last live update said they were on. */
+  sentSeat: string | null;
   look: number;
   lookTarget: number;
   lookTimer: number;
@@ -249,6 +269,11 @@ function Gardener({
       sentYaw: 0,
       route: [],
       armed: false,
+      seat: null,
+      sitWant: 0,
+      sitT: 0,
+      sitFrom: pos,
+      sentSeat: null,
       look: 0,
       lookTarget: 0,
       lookTimer: 0,
@@ -303,11 +328,22 @@ function Gardener({
       w.route = [];
       w.armed = false;
       w.remotePace = 0;
+      w.seat = null;
+      w.sitT = 0;
+    };
+
+    /** Up off the seat, back to where they stood to sit down. */
+    const standUp = () => {
+      if (!w.seat || w.sitWant === 0) return;
+      w.sitWant = 0;
+      w.sitFrom = { ...w.seat.stand };
     };
 
     /** Nobody's driving: off home. Out of sight that's instant; in view, they walk back to the cottage. */
     const goHome = () => {
       if (w.mode === "player") player.active = false;
+      w.seat = null;
+      w.sitT = 0;
       if (w.zone === "garden" && activeZone === "garden") {
         const gate = onProcession(PROCESSION_LENGTH, 0);
         let route: Point[] | null = isOpenPath(w.pos, gate, plants) ? [gate] : null;
@@ -357,6 +393,8 @@ function Gardener({
       if (driver && w.mode !== driver) {
         if (w.mode === "player") player.active = false;
         w.mode = driver;
+        w.seat = null;
+        w.sitT = 0;
         w.target = null;
         w.tend = null;
         w.route = [];
@@ -402,7 +440,31 @@ function Gardener({
       const canWalk = g.stage === "garden" && !g.activeId && !g.celebrating && !usePlantStore.getState().formOpen && !leaving && !useKeepsakes.getState().open;
       const move = canWalk ? readMove() : { x: 0, y: 0 };
       const amount = Math.hypot(move.x, move.y);
-      if (amount > 0.12) {
+      // A click on the swing or a dock bench: sit down if you're near enough, or get up if you're sat on it.
+      const asked = seatRequest.prop;
+      seatRequest.prop = null;
+      if (w.seat) {
+        if (w.sitWant === 1 && w.sitT > 0.9 && (amount > 0.12 || asked === w.seat.prop)) standUp();
+      } else if (asked && canWalk) {
+        const taken = new Set([...seated].filter(([who]) => who !== name).map(([, seat]) => seat));
+        const nearest = SEATS.filter((s) => s.prop === asked && !taken.has(s.id))
+          .map((s) => ({ s, d: Math.hypot(s.stand.x - w.pos.x, s.stand.z - w.pos.z) }))
+          .sort((a, b) => a.d - b.d)[0];
+        if (!nearest) {
+          useGardenStore.setState({ notice: `Someone's already sitting on ${PROP_PLACES[asked]}.` });
+        } else if (nearest.d > SIT_REACH) {
+          useGardenStore.setState({ notice: `Walk over to ${PROP_PLACES[asked]} to sit down.` });
+        } else {
+          w.seat = nearest.s;
+          w.sitWant = 1;
+          w.sitT = 0;
+          w.sitFrom = { ...w.pos };
+          w.waving = 0;
+          markWalked();
+          if (hoveredRef.current) setHover(false);
+        }
+      }
+      if (amount > 0.12 && !w.seat) {
         // Steer relative to the camera: up is away from it, right is to its right.
         state.camera.getWorldDirection(scratch);
         scratch.y = 0;
@@ -471,6 +533,18 @@ function Gardener({
         const step = Math.min(pace * dt, distance);
         w.pos = { x: w.pos.x + (dx / distance) * step, z: w.pos.z + (dz / distance) * step };
       }
+    } else if (w.mode === "remote" && live && (live.seat || w.seat)) {
+      // Sitting down, or getting up: the seat says where they are.
+      const liveSeat = live.zone === w.zone ? seatById(live.seat) : null;
+      if (liveSeat && (liveSeat !== w.seat || w.sitWant === 0)) {
+        w.sitFrom = { ...w.pos };
+        w.seat = liveSeat;
+        w.sitWant = 1;
+        w.sitT = 0;
+      } else if (!liveSeat) {
+        standUp();
+      }
+      w.remotePace = 0;
     } else if (w.mode === "remote" && live) {
       // Follow their updates. Normally that's step for step; after a gap (say they've just come back)
       // they hurry over from wherever they'd wandered off to.
@@ -564,11 +638,27 @@ function Gardener({
         }
       }
     }
+    // Onto the seat (or back off it) in a little hop, turning to face the way it faces.
+    if (w.seat) {
+      w.sitT = THREE.MathUtils.clamp(w.sitT + ((w.sitWant ? 1 : -1) * dt) / SIT_TIME, 0, 1);
+      const at = seatPose(w.seat);
+      const e = ease(w.sitT);
+      w.pos = { x: THREE.MathUtils.lerp(w.sitFrom.x, at.x, e), z: THREE.MathUtils.lerp(w.sitFrom.z, at.z, e) };
+      facing = at.yaw;
+      pace = 0;
+      if (w.sitWant === 0 && w.sitT === 0) w.seat = null;
+    }
+    if (w.seat && w.sitWant === 1 && w.zone === "garden") seated.set(name, w.seat.id);
+    else seated.delete(name);
     whereabouts.set(id, { zone: w.zone, pos: w.pos, target: w.target });
     if (w.mode === "waiting" || w.mode === "intro-walk") {
       procession.walkers.set(id, { position: new THREE.Vector3(w.pos.x, w.y, w.pos.z), s: w.s, done: false });
     } else {
       w.y = zoneDefinition(w.zone).ground.height(w.pos.x, w.pos.z);
+      if (w.seat) {
+        const e = ease(w.sitT);
+        w.y = THREE.MathUtils.lerp(w.y, seatPose(w.seat).y - seatDrop(look), e) + Math.sin(w.sitT * Math.PI) * 0.1;
+      }
     }
     // Anyone coming up to the cottage door (you, them, or a gardener heading home) has it opened for them.
     if (w.zone === "garden" && w.mode !== "waiting" && Math.hypot(w.pos.x - DOOR.x, w.pos.z - DOOR.z) < 1.3) procession.nearDoor.add(id);
@@ -588,7 +678,9 @@ function Gardener({
     if (name === me && (w.mode === "player" || w.mode === "intro-walk")) {
       // Tell the other device: steadily while walking or turning, and now and then while standing so they know you're still here.
       w.sinceSent += dt;
-      const changed = pace > 0.05 || w.sentPace > 0.05 || Math.abs(shortestTurn(w.sentYaw, w.yaw)) > 0.02;
+      const sittingOn = w.seat && w.sitWant === 1 ? w.seat.id : null;
+      const changed =
+        pace > 0.05 || w.sentPace > 0.05 || Math.abs(shortestTurn(w.sentYaw, w.yaw)) > 0.02 || sittingOn !== w.sentSeat;
       if ((changed && w.sinceSent >= 1 / SEND_RATE) || w.sinceSent >= HEARTBEAT) {
         const round = (v: number) => Math.round(v * 1000) / 1000;
         sendPose({
@@ -596,12 +688,14 @@ function Gardener({
           z: round(w.pos.z),
           yaw: round(w.yaw),
           pace: round(pace),
-          anim: pace > 0.05 ? "walk" : "idle",
+          anim: sittingOn ? "sit" : pace > 0.05 ? "walk" : "idle",
+          ...(sittingOn ? { seat: sittingOn } : {}),
           zone: w.zone,
         });
         w.sinceSent = 0;
         w.sentPace = pace;
         w.sentYaw = w.yaw;
+        w.sentSeat = sittingOn;
       }
     }
 
@@ -617,7 +711,13 @@ function Gardener({
     w.lookTimer -= dt;
     if (w.lookTimer <= 0) {
       const standing = (w.mode === "idle" && !w.tend) || ((w.mode === "player" || w.mode === "remote") && pace === 0);
-      w.lookTarget = standing ? (rand() - 0.5) * 1.3 : 0;
+      if (w.seat && other && sittingTogether() && rand() < 0.6) {
+        // Sitting side by side: glance over at each other.
+        const across = (other.pos.x - w.pos.x) * Math.cos(w.yaw) - (other.pos.z - w.pos.z) * Math.sin(w.yaw);
+        w.lookTarget = Math.sign(across) * 0.75;
+      } else {
+        w.lookTarget = standing ? (rand() - 0.5) * 1.3 : 0;
+      }
       w.lookTimer = 1.2 + rand() * 2.5;
     }
     w.look = damp(w.look, pace > 0 ? 0 : w.lookTarget, 3, dt);
@@ -633,12 +733,19 @@ function Gardener({
 
     if (!rig.bounce) return;
     rig.bounce.position.y = Math.abs(Math.sin(w.phase)) * 0.035 * w.moving + hop;
-    rig.leftLeg.rotation.x = swing * 0.45;
-    rig.rightLeg.rotation.x = -swing * 0.45;
+    // Sitting: legs out in front, swinging idly.
+    const sitting = w.seat ? ease(w.sitT) : 0;
+    const dangle = Math.sin(t * 2.1 + seed) * 0.16;
+    rig.leftLeg.rotation.x = swing * 0.45 * (1 - sitting) + (-1.35 + dangle) * sitting;
+    rig.rightLeg.rotation.x = -swing * 0.45 * (1 - sitting) + (-1.35 - dangle) * sitting;
+    if (rig.skirt) {
+      rig.skirt.scale.y = 1 - 0.3 * sitting;
+      rig.skirt.position.y = -0.05 + 0.0375 * sitting;
+    }
 
     const watering = look.carry === "watering-can";
     // Skelly leans in to pick; Zorrow stays upright to pour.
-    const lean = 0.07 * w.moving + (watering ? 0.05 : 0.32) * w.tending;
+    const lean = 0.07 * w.moving + (watering ? 0.05 : 0.32) * w.tending - 0.06 * sitting;
     rig.upper.rotation.x = lean;
     rig.upper.rotation.z = Math.sin(w.phase) * 0.04 * w.moving + Math.sin(t * 1.1 + seed) * 0.022 * still;
     rig.upper.scale.y = 1 + Math.sin(t * 2.2 + seed) * 0.012 * still;
@@ -652,9 +759,11 @@ function Gardener({
     // Arms swing against the leg on their own side; the carrying arm barely moves.
     const freeSwing = -swing * 0.5 * freeSide;
     const wave = Math.sin(t * 13) * 0.35;
-    free.rotation.x = freeSwing * (1 - w.greeting) - (watering ? 0 : 1.1 + Math.sin(t * 3) * 0.08) * w.tending;
+    // Sitting, hands rest in the lap.
+    free.rotation.x =
+      freeSwing * (1 - w.greeting) - (watering ? 0 : 1.1 + Math.sin(t * 3) * 0.08) * w.tending - 0.5 * sitting * (1 - w.greeting);
     free.rotation.z = freeSide * (0.1 + (2.45 + wave) * w.greeting);
-    carrying.rotation.x = swing * 0.15 * freeSide - (watering ? 0.9 : 0) * w.tending;
+    carrying.rotation.x = swing * 0.15 * freeSide - (watering ? 0.9 : 0) * w.tending - 0.45 * sitting;
     // Held a little away from the body, the basket clear of the skirt.
     carrying.rotation.z = -freeSide * ((watering ? 0.2 : 0.34) + Math.sin(t * 1.3 + seed) * 0.02 * still);
     // The can tips forward to pour, then settles back; the basket sways with each step.
@@ -689,8 +798,9 @@ function Gardener({
   useEffect(
     () => () => {
       if (walker.mode === "player") player.active = false;
+      seated.delete(name);
     },
-    [walker],
+    [walker, name],
   );
 
   const note = isMe ? "that's you" : ownerHere ? "here with you now" : profile.note;

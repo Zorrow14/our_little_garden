@@ -1,5 +1,6 @@
 import { distanceToFlowers, FENCE, FLOWER_SPOTS } from "@/lib/layout";
 import { AT_DOOR, OFF_DOORSTEP, onProcession, PROCESSION_LENGTH } from "@/lib/procession";
+import { distanceToProps, OBSTACLES, onDockWalk } from "@/lib/props";
 import { distanceToPond, POND, WATER_Y } from "@/lib/terrain";
 
 export interface Point {
@@ -16,6 +17,8 @@ const ROAM_RADIUS = FENCE.radius - 3.5;
 const POND_CLEARANCE = POND.radius * 1.22;
 const FLOWER_CLEARANCE = 0.85;
 const PLANT_CLEARANCE = 0.7;
+/** Room kept round the props (the swing, its tree, the dock, the mailbox). */
+const PROP_CLEARANCE = 0.5;
 /** How close a gardener may pick a spot to where the other is, or is heading. */
 const PERSONAL_SPACE = 1.8;
 /** How close a planned walk may pass someone standing in the garden. */
@@ -30,9 +33,10 @@ function inRoamingArea(x: number, z: number) {
   return Math.hypot(x - FENCE.x, z - FENCE.z) <= ROAM_RADIUS;
 }
 
-/** Clear of the pond, the flowers and the planted flowers. */
+/** Clear of the pond, the flowers, the props and the planted flowers. */
 function isOpenGround(x: number, z: number, plants: Point[]) {
   if (distanceToPond(x, z) < POND_CLEARANCE || distanceToFlowers(x, z) < FLOWER_CLEARANCE) return false;
+  if (distanceToProps(x, z) < PROP_CLEARANCE) return false;
   return plants.every((p) => Math.hypot(p.x - x, p.z - z) >= PLANT_CLEARANCE);
 }
 
@@ -64,10 +68,13 @@ const PLAYER_REACH = FENCE.radius - 1.4;
 const PLAYER_POND_CLEARANCE = POND.radius * 1.12;
 const PLAYER_FLOWER_CLEARANCE = 0.42;
 const PLAYER_PLANT_CLEARANCE = 0.32;
+/** Half a gardener's width, kept between them and a solid prop. */
+const PLAYER_BODY = 0.14;
 
 /**
  * How far into somewhere a walking gardener shouldn't be (past the edge, into
- * the pond, onto a flower): 0 on open ground. A step is allowed if it lands on
+ * the pond, onto a flower or a prop): 0 on open ground. The dock is open ground
+ * out over the water. A step is allowed if it lands on
  * open ground or gets less stuck, so a gardener who starts in the gateway, past
  * the edge, can still walk in.
  */
@@ -75,8 +82,9 @@ export function offGroundBy(x: number, z: number, plants: Point[]) {
   let by = Math.max(0, Math.hypot(x - FENCE.x, z - FENCE.z) - PLAYER_REACH);
   // Out through the gate, the cottage path is open ground too.
   if (by > 0) by = Math.min(by, offCottagePathBy(x, z));
-  by += Math.max(0, PLAYER_POND_CLEARANCE - distanceToPond(x, z));
+  if (!onDockWalk(x, z)) by += Math.max(0, PLAYER_POND_CLEARANCE - distanceToPond(x, z));
   by += Math.max(0, PLAYER_FLOWER_CLEARANCE - distanceToFlowers(x, z));
+  for (const o of OBSTACLES) by += Math.max(0, o.r + PLAYER_BODY - Math.hypot(o.x - x, o.z - z));
   for (const p of plants) by += Math.max(0, PLAYER_PLANT_CLEARANCE - Math.hypot(p.x - x, p.z - z));
   return by;
 }

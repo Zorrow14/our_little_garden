@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { FLOWER_REGISTRY, FLOWER_TYPES, type FlowerType } from "@/lib/flowerSpecs";
 import { distanceToFlowers, distanceToPath, FENCE, FLOWER_SPOTS } from "@/lib/layout";
+import { distanceToProps, onHilltop } from "@/lib/props";
 import { MEDIA_BUCKET, supabase } from "@/lib/supabase";
 import { distanceToPond, groundHeight, hashString, POND, WATER_Y } from "@/lib/terrain";
 
@@ -68,7 +69,8 @@ function candidate(water: boolean): Candidate {
 }
 
 function clearOfGarden({ x, z, water }: Candidate) {
-  if (water) return Math.hypot(x - LETTER_LOTUS.x, z - LETTER_LOTUS.z) > 1.45;
+  if (water) return Math.hypot(x - LETTER_LOTUS.x, z - LETTER_LOTUS.z) > 1.45 && distanceToProps(x, z) > 0.7;
+  if (distanceToProps(x, z) < 0.9 || onHilltop(x, z)) return false;
   return distanceToPond(x, z) > POND.radius * 1.25 && distanceToPath(x, z) > 0.8 && distanceToFlowers(x, z) > 1.4;
 }
 
