@@ -186,6 +186,14 @@ export function onMailNudge(listener: () => void) {
 }
 
 /** Announces arrivals: "is here" when you walk in to find them, "just came in" when they arrive after you. */
+/** Temporary, for `PresenceDebug`: the live channel's last subscribe status, when it came, and any error with it. */
+const lastStatus = { status: "not started", at: 0, error: null as string | null };
+
+/** Temporary, for `PresenceDebug`: what this page knows about its live channel right now. */
+export function presenceDebug() {
+  return { ...lastStatus, joined, channelState: channel?.state ?? "none", tracked };
+}
+
 let firstSync = true;
 let waitingHello: GardenerName | null = null;
 
@@ -246,7 +254,8 @@ export function startPresence() {
     .on("broadcast", { event: "pose" }, ({ payload }) => receivePose(payload as PoseMessage))
     .on("broadcast", { event: "greet" }, ({ payload }) => receiveGreet(payload as { to?: unknown; from?: unknown }))
     .on("broadcast", { event: "mail" }, () => mailListeners.forEach((listener) => listener()))
-    .subscribe((status) => {
+    .subscribe((status, err) => {
+      Object.assign(lastStatus, { status, at: Date.now(), error: err ? String(err.message ?? err) : null });
       joined = status === "SUBSCRIBED";
       if (joined) {
         // A reconnect starts presence afresh on the server, so track again.

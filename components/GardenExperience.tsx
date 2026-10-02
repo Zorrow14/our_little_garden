@@ -11,6 +11,7 @@ import MusicControl from "@/components/ui/MusicControl";
 import PartnerStatus from "@/components/ui/PartnerStatus";
 import PlantPanel from "@/components/ui/PlantPanel";
 import PlayerControls from "@/components/ui/PlayerControls";
+import PresenceDebug from "@/components/ui/PresenceDebug";
 import WhoAreYou from "@/components/ui/WhoAreYou";
 import ZoneFade from "@/components/ui/ZoneFade";
 import { STORAGE_KEY, useGardenStore } from "@/lib/gardenStore";
@@ -89,6 +90,7 @@ export default function GardenExperience() {
         <ZoneFade />
         <IntroOverlay />
         <WhoAreYou />
+        <PresenceDebug />
       </main>
     </MotionConfig>
   );
