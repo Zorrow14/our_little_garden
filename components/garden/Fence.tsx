@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { withCameraFade, withGrowth } from "@/lib/growth";
 import { FENCE, GATE_ANGLE } from "@/lib/layout";
-import { createRandom, groundHeight } from "@/lib/terrain";
+import { BRIDGE_ANGLE, createRandom, groundHeight } from "@/lib/terrain";
 
 const POST_SPACING = 1.3;
 const POST_HEIGHT = 0.85;
@@ -36,9 +36,16 @@ function plank(a: THREE.Vector3, b: THREE.Vector3, height: number, depth: number
   };
 }
 
+/** Whether a post at angle `a` would stand in the way out to the bridge. */
+function inBridgeGap(a: number) {
+  const turn = a - BRIDGE_ANGLE;
+  return Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))) * FENCE.radius < GATE_HALF_WIDTH;
+}
+
 /**
  * A split-rail fence around the garden: hand-set posts with two rails between
- * each pair, and a taller gateway with a crossbeam where the path comes in.
+ * each pair, and a taller gateway with a crossbeam where the path comes in,
+ * and another at the back where the way out to the bridge goes through.
  * Every post, rail and beam is one instance of a single box.
  */
 export default function Fence() {
@@ -50,20 +57,30 @@ export default function Fence() {
     const spans = Math.round((arc * FENCE.radius) / POST_SPACING);
     const list: Board[] = [];
 
+    // Posts in the way out to the bridge are left out; the two either side of it stand tall, like the gate's.
+    const baseAngle = (i: number) => GATE_ANGLE + gateHalfAngle + (i / spans) * arc;
+    const gap = (i: number) => i > 0 && i < spans && inBridgeGap(baseAngle(i));
+    const bridgePosts: number[] = [];
+
+    // Every post (and rail) draws its random numbers whether or not it's built, so the rest of the fence stays as it was.
     const posts = Array.from({ length: spans + 1 }, (_, i) => {
       const gate = i === 0 || i === spans;
-      const a = GATE_ANGLE + gateHalfAngle + (i / spans) * arc + (gate ? 0 : (rand() - 0.5) * 0.02);
+      const flanksBridge = !gap(i) && (gap(i - 1) || gap(i + 1));
+      if (flanksBridge) bridgePosts.push(i);
+      const a = baseAngle(i) + (gate ? 0 : (rand() - 0.5) * 0.02);
       const x = FENCE.x + Math.cos(a) * FENCE.radius;
       const z = FENCE.z + Math.sin(a) * FENCE.radius;
       const ground = groundHeight(x, z);
-      const height = gate ? GATE_HEIGHT : POST_HEIGHT * (0.93 + rand() * 0.14);
-      const width = gate ? 0.16 : 0.1;
-      list.push({
+      const usual = gate ? GATE_HEIGHT : POST_HEIGHT * (0.93 + rand() * 0.14);
+      const tall = gate || flanksBridge;
+      const height = tall ? GATE_HEIGHT : usual;
+      const board: Board = {
         position: new THREE.Vector3(x, ground + height / 2 - 0.08, z),
         rotation: new THREE.Euler((rand() - 0.5) * 0.06, -a + (rand() - 0.5) * 0.3, (rand() - 0.5) * 0.06),
-        size: new THREE.Vector3(width, height + 0.08, width),
+        size: new THREE.Vector3(tall ? 0.16 : 0.1, height + 0.08, tall ? 0.16 : 0.1),
         color: wood(),
-      });
+      };
+      if (!gap(i)) list.push(board);
       return { x, z, ground };
     });
 
@@ -75,21 +92,25 @@ export default function Fence() {
         const h = POST_HEIGHT * share;
         const a = new THREE.Vector3(p.x, p.ground + h + (rand() - 0.5) * 0.04, p.z);
         const b = new THREE.Vector3(q.x, q.ground + h + (rand() - 0.5) * 0.04, q.z);
-        list.push(plank(a, b, 0.06, 0.04, wood()));
+        const rail = plank(a, b, 0.06, 0.04, wood());
+        if (!gap(i) && !gap(i + 1)) list.push(rail);
       }
     }
 
-    // The gateway: a crossbeam over the path, with a short board beneath it.
-    const [left, right] = [posts[spans], posts[0]];
-    const beamY = Math.max(left.ground, right.ground) + GATE_HEIGHT - 0.12;
-    // A point level with `y` on the post's centre, pushed `reach` further out to the side.
-    const across = (post: { x: number; z: number }, y: number, reach: number) =>
-      new THREE.Vector3(post.x, y, post.z).addScaledVector(
-        new THREE.Vector3(post.x - (left.x + right.x) / 2, 0, post.z - (left.z + right.z) / 2).normalize(),
-        reach,
-      );
-    list.push(plank(across(left, beamY, 0.28), across(right, beamY, 0.28), 0.11, 0.13, wood()));
-    list.push(plank(across(left, beamY - 0.2, 0), across(right, beamY - 0.2, 0), 0.05, 0.05, wood()));
+    // Each gateway: a crossbeam over the way through, with a short board beneath it.
+    const gateway = (left: (typeof posts)[number], right: (typeof posts)[number]) => {
+      const beamY = Math.max(left.ground, right.ground) + GATE_HEIGHT - 0.12;
+      // A point level with `y` on the post's centre, pushed `reach` further out to the side.
+      const across = (post: { x: number; z: number }, y: number, reach: number) =>
+        new THREE.Vector3(post.x, y, post.z).addScaledVector(
+          new THREE.Vector3(post.x - (left.x + right.x) / 2, 0, post.z - (left.z + right.z) / 2).normalize(),
+          reach,
+        );
+      list.push(plank(across(left, beamY, 0.28), across(right, beamY, 0.28), 0.11, 0.13, wood()));
+      list.push(plank(across(left, beamY - 0.2, 0), across(right, beamY - 0.2, 0), 0.05, 0.05, wood()));
+    };
+    gateway(posts[spans], posts[0]);
+    if (bridgePosts.length === 2) gateway(posts[bridgePosts[0]], posts[bridgePosts[1]]);
 
     return list;
   }, []);

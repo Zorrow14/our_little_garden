@@ -3,7 +3,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { withCameraFade, withGrowth } from "@/lib/growth";
+import { toLocal } from "@/lib/frame";
 import { COTTAGE, DOOR, INTRO_SHOTS, PROCESSION } from "@/lib/procession";
+import { GARDEN_BRIDGE } from "@/lib/props";
 import { createRandom, groundHeight } from "@/lib/terrain";
 
 interface Tree {
@@ -22,8 +24,10 @@ const TREE_COUNT = 44;
 const RING_INNER = 17;
 const RING_DEPTH = 8;
 
-/** Keeps trees off the cottage, its path, and the intro's view of the door. */
+/** Keeps trees off the cottage, its path, the intro's view of the door, and the way on past the bridge. */
 function inClearing(x: number, z: number) {
+  const past = toLocal(GARDEN_BRIDGE, x, z);
+  if (past.z > -1 && Math.abs(past.x) < 2.4) return true;
   if (Math.hypot(x - COTTAGE.x, z - COTTAGE.z) < 4) return true;
   if (PROCESSION.getSpacedPoints(60).some((p) => Math.hypot(p.x - x, p.z - z) < 1.8)) return true;
   const view = INTRO_SHOTS.reveal.position;
@@ -33,19 +37,32 @@ function inClearing(x: number, z: number) {
 
 const CANOPY_COLORS = ["#1e4a38", "#245240", "#1b4034", "#2d5b44", "#20463f"].map((c) => new THREE.Color(c));
 
-export default function Trees() {
+/** A ring of trees round a clearing: how many, how far out they start and how deep the ring is, the ground, and where none may stand. */
+export interface TreeRing {
+  seed: number;
+  count: number;
+  inner: number;
+  depth: number;
+  height: (x: number, z: number) => number;
+  clearing: (x: number, z: number) => boolean;
+}
+
+const GARDEN_RING: TreeRing = { seed: 7, count: TREE_COUNT, inner: RING_INNER, depth: RING_DEPTH, height: groundHeight, clearing: inClearing };
+
+export default function Trees({ ring = GARDEN_RING }: { ring?: TreeRing }) {
+  const groundHeight = ring.height;
   const trees = useMemo(() => {
-    const rand = createRandom(7);
-    return Array.from({ length: TREE_COUNT }, (_, i): Tree => {
-      const a = ((i + rand() * 0.8) / TREE_COUNT) * Math.PI * 2;
-      const r = RING_INNER + rand() * RING_DEPTH;
+    const rand = createRandom(ring.seed);
+    return Array.from({ length: ring.count }, (_, i): Tree => {
+      const a = ((i + rand() * 0.8) / ring.count) * Math.PI * 2;
+      const r = ring.inner + rand() * ring.depth;
       return { x: Math.cos(a) * r, z: Math.sin(a) * r, scale: 1.2 + rand() * 1, lean: (rand() - 0.5) * 0.12 };
-    }).filter((t) => !inClearing(t.x, t.z));
-  }, []);
+    }).filter((t) => !ring.clearing(t.x, t.z));
+  }, [ring]);
 
   // Each canopy is a cluster of three or four low-poly blobs.
   const blobs = useMemo(() => {
-    const rand = createRandom(8);
+    const rand = createRandom(ring.seed + 1);
     return trees.flatMap((t) => {
       const top = groundHeight(t.x, t.z) + 2.3 * t.scale;
       const count = 3 + Math.floor(rand() * 2);
@@ -62,7 +79,7 @@ export default function Trees() {
         };
       });
     });
-  }, [trees]);
+  }, [trees, groundHeight, ring.seed]);
 
   const trunkGeometry = useMemo(() => new THREE.CylinderGeometry(0.1, 0.18, 1, 6).translate(0, 0.5, 0), []);
   const canopyGeometry = useMemo(() => new THREE.IcosahedronGeometry(1, 1), []);
@@ -100,7 +117,7 @@ export default function Trees() {
     if (canopies.current.instanceColor) canopies.current.instanceColor.needsUpdate = true;
     trunks.current.computeBoundingSphere();
     canopies.current.computeBoundingSphere();
-  }, [trees, blobs]);
+  }, [trees, blobs, groundHeight]);
 
   useEffect(
     () => () => {

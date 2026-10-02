@@ -1,10 +1,24 @@
 import type { ComponentType } from "react";
 import { HOUSE_DOOR, houseIsWalkable, houseNearestWalkable, houseOffGroundBy, housePlanWander } from "@/lib/house";
 import { COTTAGE, DOOR, OFF_DOORSTEP, onProcession, PROCESSION_LENGTH } from "@/lib/procession";
-import { deckHeight } from "@/lib/props";
+import { bridgeCrossing, bridgeHeight, bridgeLanding } from "@/lib/bridge";
+import {
+  ENTRANCES,
+  entranceLanding,
+  FAR_BRIDGE,
+  FAR_CROSSING,
+  FAR_LANDING,
+  farHeight,
+  farIsWalkable,
+  farNearestWalkable,
+  farOffGroundBy,
+  farPlanWander,
+} from "@/lib/farGarden";
+import { deckHeight, GARDEN_BRIDGE } from "@/lib/props";
 import { groundHeight, WATER_Y } from "@/lib/terrain";
 import { isWalkable, nearestWalkable, offGroundBy, planWander, type Point, type WanderPlan } from "@/lib/wander";
 import { goToZone, type ZoneName } from "@/lib/zones";
+import FarGardenZone from "./FarGardenZone";
 import GardenZone from "./GardenZone";
 import HouseZone from "./HouseZone";
 
@@ -46,7 +60,7 @@ export interface ZoneDefinition {
 
 /** The cottage floor sits above the slope it's built on, the dock above the water; out on the grass, a gardener crossing the pond wades. */
 function gardenHeight(x: number, z: number) {
-  const deck = deckHeight(x, z);
+  const deck = deckHeight(x, z) ?? bridgeHeight(GARDEN_BRIDGE, x, z);
   if (deck !== null) return Math.max(deck, groundHeight(x, z));
   const c = Math.cos(COTTAGE.yaw);
   const s = Math.sin(COTTAGE.yaw);
@@ -55,6 +69,9 @@ function gardenHeight(x: number, z: number) {
   if (Math.abs(lx) < COTTAGE.width / 2 && Math.abs(lz) < COTTAGE.depth / 2 + 0.05) return COTTAGE.floorY;
   return Math.max(groundHeight(x, z), WATER_Y - 0.12);
 }
+
+/** How far in from the bridge's near end you land, crossing back into the garden: just inside the fence. */
+const BRIDGE_LANDING = 2.45;
 
 const spawnOnPath = (s: number): SpawnPoint => {
   const p = onProcession(s, 0);
@@ -81,8 +98,13 @@ export const ZONES = {
       gate: spawnOnPath(PROCESSION_LENGTH),
       /** On the path just outside the cottage door, heading toward the garden. */
       "cottage-door": spawnOnPath(OFF_DOORSTEP + 0.15),
+      /** Back over the bridge from the far garden: just inside the fence, heading into the garden. */
+      bridge: bridgeLanding(GARDEN_BRIDGE, BRIDGE_LANDING),
     },
-    exits: [{ name: "cottage-door", at: DOOR, radius: 0.42, to: "house", spawn: "front-door" }],
+    exits: [
+      { name: "cottage-door", at: DOOR, radius: 0.42, to: "house", spawn: "front-door" },
+      { name: "bridge", ...bridgeCrossing(GARDEN_BRIDGE), to: "far-garden", spawn: "bridge" },
+    ],
   },
   house: {
     Scene: HouseZone,
@@ -100,6 +122,30 @@ export const ZONES = {
       home: { x: 0.95, z: 0.75, yaw: -2.4 },
     },
     exits: [{ name: "front-door", at: { x: HOUSE_DOOR.x + 0.28, z: HOUSE_DOOR.z }, radius: 0.32, to: "garden", spawn: "cottage-door" }],
+  },
+  "far-garden": {
+    Scene: FarGardenZone,
+    ground: {
+      height: (x, z) => {
+        const deck = bridgeHeight(FAR_BRIDGE, x, z);
+        return deck === null ? farHeight(x, z) : Math.max(deck, farHeight(x, z));
+      },
+      offGroundBy: (x, z) => farOffGroundBy(x, z),
+      isWalkable: (x, z) => farIsWalkable(x, z),
+      planWander: (from, claimed, blockers, _plants, rand) => farPlanWander(from, claimed, blockers, rand),
+      nearestWalkable: (p) => farNearestWalkable(p),
+    },
+    spawns: {
+      /** Over the bridge from the garden: just in from its far-garden end, facing the meadow. */
+      bridge: FAR_LANDING,
+      /** Back out of each entrance's place (once it's built): just in front of it. */
+      ...Object.fromEntries(ENTRANCES.map((e) => [e.id, entranceLanding(e)])),
+    },
+    exits: [
+      { name: "bridge", ...FAR_CROSSING, to: "garden", spawn: "bridge" },
+      // Each entrance becomes a way in once the place behind it is built and named in its `to`.
+      ...ENTRANCES.flatMap((e) => (e.to ? [{ name: e.id, at: { x: e.x, z: e.z }, radius: 0.42, to: e.to, spawn: "far-garden" }] : [])),
+    ],
   },
 } satisfies Record<ZoneName, ZoneDefinition>;
 

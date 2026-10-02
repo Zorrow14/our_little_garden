@@ -79,7 +79,12 @@ The cottage keeps three things you can click. Each glows softly when you hover o
 
 Inside, the music softens as if heard through the walls. To use a separate cottage track instead, put it in `public/audio/` and set `HOUSE_SRC` in `lib/music.ts`.
 
-You only see the other person's gardener when you're in the same place. The top-left corner says where they are: "here with you", "in the garden", "in the cottage", or "away". While someone is away, their gardener is at home in the cottage, pottering about.
+**The far garden.** At the back of the garden, a gateway in the fence leads to a little wooden bridge over a brook.
+- **Getting there:** walk over the bridge (or click it) to reach the far garden, an open meadow with a signpost in the middle.
+- **The doorways:** five are spaced around it: a greenhouse door, a white gazebo arch, a stone gateway with a lighthouse lamp, a hedge arch into the maze, and a ladder up to a treehouse. Each is the way into a place still to be built, so for now clicking one just says so.
+- **Getting back:** cross the bridge.
+
+You only see the other person's gardener when you're in the same place. The top-left corner says where they are: "here with you", "in the garden", "in the cottage", "in the far garden", or "away". While someone is away, their gardener is at home in the cottage, pottering about.
 
 This runs on a Supabase Realtime channel (`garden-live`):
 - **Presence** says who's online.
@@ -130,6 +135,8 @@ The site is public to anyone with its URL (it's hidden from search engines), so 
 | `lib/presence.ts`, `lib/playerInput.ts` | The live garden: who you are, who's online, sending and replaying movement; keyboard and joystick input |
 | `components/ui/PlayerControls.tsx`, `components/ui/WhoAreYou.tsx` | WASD/arrow keys and the touch joystick; the "Who are you?" question |
 | `components/zones/registry.ts`, `lib/zones.ts` | The zones (garden, cottage interior): each one's scene, spawn points and exits, and which one is showing |
+| `components/zones/FarGardenZone.tsx`, `components/zones/far/`, `lib/farGarden.ts` | The far garden: its meadow, signpost and five entrances |
+| `lib/bridge.ts`, `components/garden/props/Bridge.tsx`, `components/garden/props/Brook.tsx` | The bridges and the brook between the garden and the far garden |
 | `components/zones/HouseZone.tsx`, `lib/house.ts` | The cottage's interior and its layout |
 | `components/zones/HouseKeepsakes.tsx`, `components/ui/Keepsakes.tsx` | The photo wall, notes board and letter shelf in the room, and the panels they open |
 | `lib/keepsakes.ts`, `lib/notes.ts`, `lib/housePhotos.ts` | Which keepsake panel is open, opened letters and the photo wall's photos; the shared notes board; photos hung in the cottage |

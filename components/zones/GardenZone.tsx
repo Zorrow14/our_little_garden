@@ -15,7 +15,13 @@ import Pond from "@/components/garden/Pond";
 import Rocks from "@/components/garden/Rocks";
 import Sky from "@/components/garden/Sky";
 import Trees from "@/components/garden/Trees";
+import SteppingStones from "@/components/garden/SteppingStones";
 import Wildflowers from "@/components/garden/Wildflowers";
+import { GARDEN_BRIDGE, GARDEN_BRIDGE_PATH } from "@/lib/props";
+import { GARDEN_BROOK, groundHeight } from "@/lib/terrain";
+import { takeExit } from "./registry";
+import Bridge from "@/components/garden/props/Bridge";
+import BrookWater from "@/components/garden/props/Brook";
 import Dock from "@/components/garden/props/Dock";
 import Mailbox from "@/components/garden/props/Mailbox";
 import { PropHoverLight } from "@/components/garden/props/shared";
@@ -25,7 +31,8 @@ import TogetherCue from "@/components/garden/props/TogetherCue";
 
 /**
  * The garden zone: the night garden inside its fence, with its swing, dock,
- * mailbox and stargazing hill, and the cottage outside the gate.
+ * mailbox and stargazing hill; the cottage outside the gate; and the bridge
+ * over the brook at the back, to the far garden.
  */
 export default function GardenZone() {
   return (
@@ -47,6 +54,9 @@ export default function GardenZone() {
       <Dock />
       <Mailbox />
       <StargazingHill />
+      <BrookWater brook={GARDEN_BROOK} height={groundHeight} />
+      <Bridge span={GARDEN_BRIDGE} tag="The bridge" note="to the far garden" onSelect={() => takeExit("garden", "bridge")} />
+      <SteppingStones runs={GARDEN_BRIDGE_PATH} height={groundHeight} seed={13} />
       <TogetherCue />
       <PropHoverLight />
       <Cottage />

@@ -42,7 +42,8 @@ export default function GardenHud() {
   const clearNotice = useGardenStore((s) => s.clearNotice);
   const me = usePresence((s) => s.me);
   const walked = usePresence((s) => s.walked);
-  const indoors = useZone((s) => s.zone !== "garden");
+  const zone = useZone((s) => s.zone);
+  const indoors = zone === "house";
   const stars = useStargazing((s) => s.by);
 
   useEffect(() => {
@@ -65,6 +66,16 @@ export default function GardenHud() {
       text: (
         <>
           <Tap /> the photos, the notes board or the bookshelf
+          {walkHint && <span className="block">{walkHint}</span>}
+        </>
+      ),
+    };
+  else if (zone === "far-garden")
+    hint = {
+      key: walkHint ? "far-walk" : "far",
+      text: (
+        <>
+          Five doorways, each to somewhere still being built. Cross the bridge to go back.
           {walkHint && <span className="block">{walkHint}</span>}
         </>
       ),

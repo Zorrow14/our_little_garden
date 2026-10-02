@@ -13,14 +13,10 @@ import { player } from "@/lib/playerInput";
 import { STARGAZE } from "@/lib/props";
 import { useStargazing } from "@/lib/stargazing";
 import { useZone } from "@/lib/zones";
+import { arrivalPose, fitFov, framed, keepPlayerInView, type Pose, portraitPull } from "@/components/zones/camera";
 import { ZONES } from "@/components/zones/registry";
 import { GATE, INTRO_SHOTS, PROCESSION_LENGTH, procession } from "@/lib/procession";
 import { groundHeight, HILL } from "@/lib/terrain";
-
-interface Pose {
-  position: THREE.Vector3;
-  target: THREE.Vector3;
-}
 
 /** High above and behind the garden; the intro descends from here. */
 const INTRO_POSE: Pose = {
@@ -34,29 +30,21 @@ const GARDEN_POSE: Pose = {
   target: new THREE.Vector3(0, 0.3, -0.9),
 };
 
-/** Tall phone screens back the camera off so the whole garden still fits side to side. */
-function portraitPull(aspect: number) {
-  return aspect >= 1 ? 1 : THREE.MathUtils.lerp(1.6, 1, THREE.MathUtils.clamp((aspect - 0.45) / 0.55, 0, 1));
-}
-
 function gardenPose(aspect: number): Pose {
   const offset = GARDEN_POSE.position.clone().sub(GARDEN_POSE.target).multiplyScalar(portraitPull(aspect));
   return { position: GARDEN_POSE.target.clone().add(offset), target: GARDEN_POSE.target.clone() };
 }
 
-/** An intro shot, backed off along its line of sight on tall phone screens (less than the garden view: it's framing something small). */
-function introShot(position: THREE.Vector3, target: THREE.Vector3, aspect: number): Pose {
-  const offset = position.clone().sub(target).multiplyScalar(THREE.MathUtils.lerp(1, portraitPull(aspect), 0.55));
-  return { position: target.clone().add(offset), target: target.clone() };
-}
+const introShot = framed;
 
-/** Coming out of the cottage: just behind and above the doorstep, looking out along the path. */
-function doorstepPose(aspect: number): Pose {
-  const step = ZONES.garden.spawns["cottage-door"];
-  const target = new THREE.Vector3(step.x, groundHeight(step.x, step.z) + 0.6, step.z);
-  const back = new THREE.Vector3(-Math.sin(step.yaw), 0, -Math.cos(step.yaw));
-  const position = target.clone().addScaledVector(back, 3.2).add(new THREE.Vector3(0, 2.6, 0));
-  return introShot(position, target, aspect);
+/**
+ * Arriving in the garden: out of the cottage, just behind and above the
+ * doorstep, looking down the path; otherwise (back over the bridge too, which
+ * is in sight from it) the usual view.
+ */
+function arrivalView(arrival: string | null, aspect: number): Pose {
+  if (arrival === "cottage-door") return arrivalPose(ZONES.garden.spawns["cottage-door"], groundHeight, 3.2, 2.6, aspect);
+  return gardenPose(aspect);
 }
 
 /** Stargazing: low on the hill's flank, tipped up past its top at the sky, with whoever's on the hill along the bottom. */
@@ -71,11 +59,6 @@ function stargazePose(aspect: number): Pose {
 /** Where the camera looks while trailing the gardeners: their heads, and the gate as they reach it. */
 const LOOK_ABOVE_FEET = new THREE.Vector3(0, 0.75, 0);
 const GATE_TARGET = new THREE.Vector3(GATE.x, groundHeight(GATE.x, GATE.z) + 0.75, GATE.z);
-
-/** How near the edges of the screen your gardener can stroll before the view follows (in -1..1 screen units). */
-const SAFE_X = 0.6;
-const SAFE_TOP = 0.45;
-const SAFE_BOTTOM = -0.5;
 
 /** A viewpoint on the same side as `from`, looking at `anchor` from a little above. */
 function focusPose(anchor: THREE.Vector3, from: THREE.Vector3, distance: number, height: number): Pose {
@@ -108,7 +91,6 @@ export default function CameraRig() {
   const introPhase = useRef<"reveal" | "follow" | "settle" | "done">("done");
   const focus = useMemo(() => new THREE.Vector3(), []);
   const wanted = useMemo(() => new THREE.Vector3(), []);
-  const onScreen = useMemo(() => new THREE.Vector3(), []);
 
   /** Glide camera and orbit target together; the controls are paused for the flight. */
   const flyTo = (pose: Pose, duration: number, onArrive?: () => void) => {
@@ -128,18 +110,14 @@ export default function CameraRig() {
     c.update();
   };
 
-  useEffect(() => {
-    camera.fov = aspect >= 1 ? 45 : THREE.MathUtils.lerp(58, 45, THREE.MathUtils.clamp((aspect - 0.45) / 0.55, 0, 1));
-    camera.updateProjectionMatrix();
-  }, [camera, aspect]);
+  useEffect(() => fitFov(camera, aspect), [camera, aspect]);
 
   // Place the camera before the first frame: up high for the intro, or at the garden view.
   useLayoutEffect(() => {
     const c = controls.current;
     const inGarden = useGardenStore.getState().stage === "garden";
-    // Back out of the cottage: start on the doorstep, looking down the path toward the garden.
-    const { arrival } = useZone.getState();
-    const pose = inGarden ? (arrival === "cottage-door" ? doorstepPose(camera.aspect) : gardenPose(camera.aspect)) : INTRO_POSE;
+    // Back out of the cottage or over the bridge: start where you come in.
+    const pose = inGarden ? arrivalView(useZone.getState().arrival, camera.aspect) : INTRO_POSE;
     camera.position.copy(pose.position);
     c.target.copy(pose.target);
     camera.lookAt(c.target);
@@ -149,27 +127,6 @@ export default function CameraRig() {
       flight.current?.kill();
     };
   }, [camera]);
-
-  /**
-   * While you walk your gardener, the view drifts along with them once they
-   * near the edge of the screen, keeping its angle and distance. Standing
-   * still, the view stays wherever you've turned it.
-   */
-  const keepPlayerInView = (delta: number) => {
-    const c = controls.current;
-    if (!player.active || !player.moving || !c.enabled) return;
-    onScreen.set(player.x, player.y + 0.6, player.z).project(camera);
-    const behind = onScreen.z > 1;
-    const outside = Math.max(Math.abs(onScreen.x) - SAFE_X, onScreen.y - SAFE_TOP, SAFE_BOTTOM - onScreen.y, 0);
-    if (!behind && outside === 0) return;
-    const k = Math.min(1, behind ? 1 : outside * 3) * (1 - Math.exp(-5 * delta));
-    const dx = (player.x - c.target.x) * k;
-    const dz = (player.z - c.target.z) * k;
-    c.target.x += dx;
-    c.target.z += dz;
-    camera.position.x += dx;
-    camera.position.z += dz;
-  };
 
   /** Glide over the garden, then hand the camera to her. */
   const settle = (duration: number) => {
@@ -207,7 +164,7 @@ export default function CameraRig() {
   useFrame((_, delta) => {
     const phase = introPhase.current;
     if (phase === "done") {
-      keepPlayerInView(delta);
+      keepPlayerInView(camera, controls.current, delta);
       return;
     }
     if (phase !== "reveal" && phase !== "follow") return;

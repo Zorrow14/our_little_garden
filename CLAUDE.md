@@ -73,12 +73,15 @@ In the cinematic, the camera flies to the cottage outside the gate, then the doo
 - **Wandering:** `lib/wander.ts` picks walkable targets, avoiding the pond, flowers, plants and each other. `offGroundBy` is the looser check for steered gardeners.
 
 ### Zones (`components/zones/registry.ts`)
-- **The registry:** `ZONES` maps each zone name (`garden`, `house`) to four things:
+- **The registry:** `ZONES` maps each zone name (`garden`, `house`, `far-garden`) to four things:
   - `Scene`: everything in the zone except the gardeners, including its own camera and `OrbitControls`.
   - `ground`: height and walkability, plus the wander planner.
   - `spawns`: arrival points, by entry point.
   - `exits`: name, position, radius, target zone and target spawn.
-- **Adding a zone:** add its name to `ZONE_NAMES` in `lib/zones.ts`, register it, and add an exit leading to it from an existing zone.
+- **Adding a zone:**
+  - add its name to `ZONE_NAMES` in `lib/zones.ts`, with its wording in `ZONE_PLACES` and `ZONE_SHORT` (presence and `PartnerStatus`) and its `ZONE_INDOORS` (music);
+  - register it;
+  - add an exit leading to it from an existing zone.
 - **Switching:** happens client-side. `goToZone` sets `leaving`, `ZoneFade` fades to dark, then `arriveInZone` swaps `zone`. `GardenCanvas` renders `<Scene key={zone} />`. `Gardeners` stays mounted outside the zones, so walkers keep their state, and the Realtime channel is untouched.
 - **Each walker has a `zone`:**
   - You are always in the zone on screen, appearing at the arrival spawn.
@@ -88,7 +91,25 @@ In the cinematic, the camera flies to the cottage outside the gate, then the doo
 - **Doors:**
   - Garden: the cottage door is the exit. `procession.nearDoor` opens it for any gardener nearby, and the walkable corridor out to it is in `offGroundBy` in `lib/wander.ts`.
   - House: the room lives in `lib/house.ts` (pure layout and walkability) and `components/zones/HouseZone.tsx`. The walls are inward-facing planes, so the near ones disappear from the outside camera.
+  - Bridge: see the far garden below.
   - Either way, walking into an exit (after first stepping clear of it) or clicking the door takes it.
+- **The far garden (`lib/farGarden.ts`, `components/zones/FarGardenZone.tsx`):**
+  - **Getting there:** over the bridge at the back of the garden.
+    - `lib/bridge.ts` holds the generic footbridge maths: its arch, deck height, a walkway that funnels you onto it, the crossing exit at its far end, and the landing spawn.
+    - Each side has its own bridge over the "same" brook. A brook is a channel cut along an arc (`Brook`/`brookDepth` in `lib/terrain.ts`), with a water ribbon from `props/Brook.tsx`.
+    - In the garden, `GARDEN_BRIDGE` (in `lib/props.ts`) sits at `BRIDGE_ANGLE`, through a second gateway in `Fence`. Its walkway joins `offGroundBy`, its deck joins `gardenHeight`, and `Trees` keeps a clearing beyond it.
+  - **The meadow:** an open space in its own coordinates, reusing the garden's `Ground`, `Grass` and `Trees`, which now take `terrain`, `field` and `ring` props. It has a signpost in the middle and five entrances (`ENTRANCES`) evenly round it.
+  - **Adding a structure (Phase 3):** each entrance has a `to: ZoneName | null`. To open one:
+    - build its zone, giving it a spawn named `far-garden` and an exit back to the far garden's spawn named after the entrance's id (`entranceLanding`);
+    - set `to`.
+    The registry turns every entrance with a `to` into an exit (walk into the doorway, or click it). Until then, clicking it says it's still being built. Neither the bridge nor zone switching needs touching.
+- **Cameras:** `components/zones/camera.ts` has what the outdoor zones share:
+  - `portraitPull` and `framed` for tall screens;
+  - `arrivalPose`, for behind where you appear;
+  - `keepPlayerInView`, the follow;
+  - `fitFov`.
+
+  The far garden opens on an overview of the meadow when you come over the bridge.
 - **Keepsakes in the cottage:** these are clickable room objects in `components/zones/HouseKeepsakes.tsx`, each wrapped in `KeepsakeObject` (a halo, plus a point light and a slight lift on hover).
   - **Photo wall:** `useWallPhotos` merges two sources, each tagged with its `origin`:
     - photos hung directly in the cottage: the `house_photos` table, synced by `startHousePhotoSync` in `lib/housePhotos.ts`, with files under `house-photos/` in `garden-media`. Upload is behind the passcode.

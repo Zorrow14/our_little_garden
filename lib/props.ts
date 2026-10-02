@@ -1,36 +1,21 @@
+import { type BridgeSpan, makeBridge, offBridgeWalkBy } from "@/lib/bridge";
+import { type Frame, toLocal, toWorld } from "@/lib/frame";
 import { FENCE } from "@/lib/layout";
-import { groundHeight, HILL, POND, WATER_Y } from "@/lib/terrain";
+import { BRIDGE_ANGLE, GARDEN_BROOK, groundHeight, HILL, POND, WATER_Y } from "@/lib/terrain";
 import type { Point } from "@/lib/wander";
 
 /**
  * Where the garden's props stand: the swing under its tree, the dock out into
- * the pond, the mailbox by the gate, and (in `lib/terrain`) the stargazing hill.
- * Pure layout plus a little shared runtime state about who's sitting where;
- * the scene, the gardeners and the walkable ground all read from here.
+ * the pond, the mailbox by the gate, the bridge to the far garden, and (in
+ * `lib/terrain`) the stargazing hill. Pure layout plus a little shared runtime
+ * state about who's sitting where; the scene, the gardeners and the walkable
+ * ground all read from here.
  *
- * Each prop has its own space, as the cottage does: an origin and a turn
- * (`yaw`) that points its front, local +z, the way it faces.
+ * Each prop has its own space (a `Frame`), as the cottage does.
  */
 
-export interface Frame {
-  x: number;
-  z: number;
-  yaw: number;
-}
-
-export function toWorld(f: Frame, lx: number, lz: number): Point {
-  const c = Math.cos(f.yaw);
-  const s = Math.sin(f.yaw);
-  return { x: f.x + lx * c + lz * s, z: f.z - lx * s + lz * c };
-}
-
-export function toLocal(f: Frame, x: number, z: number): Point {
-  const c = Math.cos(f.yaw);
-  const s = Math.sin(f.yaw);
-  const dx = x - f.x;
-  const dz = z - f.z;
-  return { x: dx * c - dz * s, z: dx * s + dz * c };
-}
+export type { Frame } from "@/lib/frame";
+export { toLocal, toWorld } from "@/lib/frame";
 
 // ---------------------------------------------------------------------------
 // The swing: a two-seater hung from a low branch, on the quiet left of the
@@ -106,6 +91,31 @@ function distanceToDock(x: number, z: number) {
 export const MAILBOX: Frame = { x: 0.05, z: 10.75, yaw: Math.PI / 2 - 0.15 };
 
 // ---------------------------------------------------------------------------
+// The bridge to the far garden: through a second gap in the back of the
+// fence and over the brook beyond it.
+
+const OUT = { x: Math.cos(BRIDGE_ANGLE), z: Math.sin(BRIDGE_ANGLE) };
+const nearEnd = GARDEN_BROOK.radius - 1.75;
+export const GARDEN_BRIDGE: BridgeSpan = makeBridge(
+  { x: FENCE.x + OUT.x * nearEnd, z: FENCE.z + OUT.z * nearEnd, yaw: Math.atan2(OUT.x, OUT.z) },
+  3.5,
+  groundHeight,
+);
+/** How far back into the garden the way onto the bridge starts: from inside the fence, out through its gap. */
+export const BRIDGE_APPROACH = nearEnd - (FENCE.radius - 2.2);
+
+/** Stepping stones out through the fence to the bridge, and on from its far end into the trees. */
+export const GARDEN_BRIDGE_PATH: [Point, Point][] = [
+  [toWorld(GARDEN_BRIDGE, 0, -BRIDGE_APPROACH - 0.6), toWorld(GARDEN_BRIDGE, 0, -0.35)],
+  [toWorld(GARDEN_BRIDGE, 0, GARDEN_BRIDGE.length + 0.4), toWorld(GARDEN_BRIDGE, 0, GARDEN_BRIDGE.length + 4)],
+];
+
+/** How far (x, z) is off the way out through the fence and over the bridge: 0 on it. */
+export function offGardenBridgeBy(x: number, z: number) {
+  return offBridgeWalkBy(GARDEN_BRIDGE, x, z, BRIDGE_APPROACH);
+}
+
+// ---------------------------------------------------------------------------
 // Spacing.
 
 /** Solid things to walk round: the tree's trunk, the swing's seat, the mailbox's post. */
@@ -117,11 +127,11 @@ export const OBSTACLES: (Point & { r: number })[] = [
 ];
 
 /**
- * How far (x, z) is from the nearest prop: the obstacles above and the dock.
+ * How far (x, z) is from the nearest prop: the obstacles above, the dock, and the way to the bridge.
  * Scenery, wandering and new plants use it to keep their distance.
  */
 export function distanceToProps(x: number, z: number) {
-  let min = distanceToDock(x, z);
+  let min = Math.min(distanceToDock(x, z), offGardenBridgeBy(x, z) - 0.15);
   for (const o of OBSTACLES) min = Math.min(min, Math.hypot(o.x - x, o.z - z) - o.r);
   return Math.max(0, min);
 }

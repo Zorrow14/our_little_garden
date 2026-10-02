@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { useZone } from "@/lib/zones";
+import { useZone, ZONE_INDOORS } from "@/lib/zones";
 
 /**
  * Background music: one looping track that starts with the click on "Enter the
@@ -168,9 +168,9 @@ export function startMusic() {
       })
       .catch(() => (houseOk = false));
   }
-  indoors = useZone.getState().zone !== "garden";
+  indoors = ZONE_INDOORS[useZone.getState().zone];
   useZone.subscribe((s, prev) => {
-    if (s.zone !== prev.zone) setIndoors(s.zone !== "garden");
+    if (s.zone !== prev.zone) setIndoors(ZONE_INDOORS[s.zone]);
   });
 
   audio

@@ -1,6 +1,6 @@
 import { distanceToFlowers, FENCE, FLOWER_SPOTS } from "@/lib/layout";
 import { AT_DOOR, OFF_DOORSTEP, onProcession, PROCESSION_LENGTH } from "@/lib/procession";
-import { distanceToProps, OBSTACLES, onDockWalk } from "@/lib/props";
+import { distanceToProps, OBSTACLES, offGardenBridgeBy, onDockWalk } from "@/lib/props";
 import { distanceToPond, POND, WATER_Y } from "@/lib/terrain";
 
 export interface Point {
@@ -80,8 +80,8 @@ const PLAYER_BODY = 0.14;
  */
 export function offGroundBy(x: number, z: number, plants: Point[]) {
   let by = Math.max(0, Math.hypot(x - FENCE.x, z - FENCE.z) - PLAYER_REACH);
-  // Out through the gate, the cottage path is open ground too.
-  if (by > 0) by = Math.min(by, offCottagePathBy(x, z));
+  // Out through the gate, the cottage path is open ground too, as is the way out over the bridge.
+  if (by > 0) by = Math.min(by, offCottagePathBy(x, z), offGardenBridgeBy(x, z));
   if (!onDockWalk(x, z)) by += Math.max(0, PLAYER_POND_CLEARANCE - distanceToPond(x, z));
   by += Math.max(0, PLAYER_FLOWER_CLEARANCE - distanceToFlowers(x, z));
   for (const o of OBSTACLES) by += Math.max(0, o.r + PLAYER_BODY - Math.hypot(o.x - x, o.z - z));

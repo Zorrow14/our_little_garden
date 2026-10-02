@@ -3,9 +3,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useGardenStore } from "@/lib/gardenStore";
 import { GARDENER_NAMES, usePresence } from "@/lib/presence";
-import { useZone, ZONE_PLACES, type ZoneName } from "@/lib/zones";
+import { useZone, ZONE_PLACES, ZONE_SHORT } from "@/lib/zones";
 
-const SHORT: Record<ZoneName, string> = { garden: "garden", house: "cottage" };
 
 /**
  * Top left: where the other person is right now, so you know whether to go and
@@ -25,7 +24,7 @@ export default function PartnerStatus() {
   if (partner && online && theirZone) {
     const together = theirZone === myZone;
     long = together ? `${partner} is here with you` : `${partner} is ${ZONE_PLACES[theirZone]}`;
-    short = `${partner} · ${together ? "here" : SHORT[theirZone]}`;
+    short = `${partner} · ${together ? "here" : ZONE_SHORT[theirZone]}`;
     tone = together ? "bg-lantern shadow-[0_0_8px_rgb(255_201_120/0.8)]" : "bg-[#9fd3a9]";
   } else if (partner) {
     long = `${partner} is away`;

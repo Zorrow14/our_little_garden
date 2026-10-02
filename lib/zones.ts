@@ -1,21 +1,37 @@
 import { create } from "zustand";
 
 /**
- * The places you can be: the garden, and the inside of the cottage. Each zone's
+ * The places you can be: the garden, the inside of the cottage, and the far
+ * garden over the bridge (with more to come off it). Each zone's
  * scene, spawn points and exits are registered in `components/zones/registry`;
  * this file holds just the names and which zone is showing, so the UI can use
  * them without pulling in three.js.
  */
 
-export const ZONE_NAMES = ["garden", "house"] as const;
+export const ZONE_NAMES = ["garden", "house", "far-garden"] as const;
 export type ZoneName = (typeof ZONE_NAMES)[number];
 
 export const isZone = (value: unknown): value is ZoneName => ZONE_NAMES.includes(value as ZoneName);
 
-/** Where someone is, for "Skelly is …". */
+/** Where someone is, for "Skelly is …". Add each new zone here too. */
 export const ZONE_PLACES: Record<ZoneName, string> = {
   garden: "in the garden",
   house: "in the cottage",
+  "far-garden": "in the far garden",
+};
+
+/** The same, in a word or two, for "Skelly · cottage" on narrow screens. */
+export const ZONE_SHORT: Record<ZoneName, string> = {
+  garden: "garden",
+  house: "cottage",
+  "far-garden": "far garden",
+};
+
+/** Whether a zone is indoors, where the music is heard through the walls. */
+export const ZONE_INDOORS: Record<ZoneName, boolean> = {
+  garden: false,
+  house: true,
+  "far-garden": false,
 };
 
 /** Where you arrive when the site opens. */

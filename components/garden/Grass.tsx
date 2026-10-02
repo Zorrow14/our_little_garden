@@ -78,7 +78,28 @@ const fragmentShader = /* glsl */ `
   }
 `;
 
-export default function Grass() {
+/** Where a field of grass grows: within `radius` of `center`, on `height`, wherever `open` allows a clump. */
+export interface GrassField {
+  radius: number;
+  center: [number, number];
+  height: (x: number, z: number) => number;
+  open: (x: number, z: number) => boolean;
+}
+
+/** The garden's grass: inside the fence, round the pond, off the path, and clear of the flowers and props. */
+const GARDEN_FIELD: GrassField = {
+  radius: 12.5,
+  center: [0, -0.5],
+  height: groundHeight,
+  open: (x, z) =>
+    distanceToPond(x, z) >= POND.radius * 1.02 &&
+    distanceToPath(x, z) >= 0.5 &&
+    distanceToFlowers(x, z) >= 0.35 &&
+    // Not up through the dock's boards.
+    distanceToProps(x, z) >= 0.15,
+};
+
+export default function Grass({ field = GARDEN_FIELD }: { field?: GrassField }) {
   const quality = useGardenStore((s) => s.quality);
   const mesh = useRef<THREE.InstancedMesh>(null!);
 
@@ -91,18 +112,16 @@ export default function Grass() {
     const colors = new Float32Array(MAX_BLADES * 3);
     let count = 0;
     for (let attempt = 0; attempt < CLUMPS * 6 && count < MAX_BLADES; attempt++) {
-      const r = Math.sqrt(rand()) * 12.5;
+      const r = Math.sqrt(rand()) * field.radius;
       const a = rand() * Math.PI * 2;
-      const cx = Math.cos(a) * r;
-      const cz = Math.sin(a) * r - 0.5;
-      if (distanceToPond(cx, cz) < POND.radius * 1.02 || distanceToPath(cx, cz) < 0.5 || distanceToFlowers(cx, cz) < 0.35) continue;
-      // Not up through the dock's boards.
-      if (distanceToProps(cx, cz) < 0.15) continue;
+      const cx = Math.cos(a) * r + field.center[0];
+      const cz = Math.sin(a) * r + field.center[1];
+      if (!field.open(cx, cz)) continue;
       const tint = 0.75 + rand() * 0.45;
       for (let b = 0; b < BLADES_PER_CLUMP && count < MAX_BLADES; b++) {
         const x = cx + (rand() - 0.5) * 0.45;
         const z = cz + (rand() - 0.5) * 0.45;
-        m.position.set(x, groundHeight(x, z) - 0.02, z);
+        m.position.set(x, field.height(x, z) - 0.02, z);
         m.rotation.set((rand() - 0.5) * 0.3, rand() * Math.PI * 2, (rand() - 0.5) * 0.3);
         const width = 0.8 + rand() * 0.7;
         m.scale.set(width, 0.18 + rand() * 0.3, width);
@@ -113,7 +132,7 @@ export default function Grass() {
       }
     }
     return { matrices, colors, count };
-  }, []);
+  }, [field]);
 
   const geometry = useMemo(() => createBladeGeometry(), []);
   const material = useMemo(
