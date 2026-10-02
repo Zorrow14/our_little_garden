@@ -60,7 +60,7 @@ The first time each device opens the garden, it asks **Who are you? Zorrow / Ske
 **Inside the cottage.** Follow the stepping stones out of the gate to the cottage, then walk into its door or click it to go inside. Inside is a little room with a bed, a table, a bookshelf and a plant. To go back out, walk into the door or click it.
 
 The cottage keeps three things you can click. Each glows softly when you hover over it.
-- **The photo wall above the bed:** every photo from a letter you've opened, with a gallery to browse them full size.
+- **The photo wall above the bed:** photos either of you hang there (with **Add a photo**, after the passcode, plus an optional caption), and every photo from a letter you've opened. There's a gallery to browse them full size. Hung photos are stored in the Supabase table `house_photos`, with the files under `house-photos/` in the `garden-media` bucket.
 - **The corkboard by the door:** short notes either of you can pin (after the same passcode as planting). They appear on the other person's board straight away. Notes are stored in the Supabase table `notes`. To take one down, delete its row in the dashboard (Table Editor → notes).
 - **The bookshelf:** every letter you've already opened, to read again without walking back to its flower. Letters you haven't opened in the garden yet never show up here.
 
@@ -119,7 +119,7 @@ The site is public to anyone with its URL (it's hidden from search engines), so 
 | `components/zones/registry.ts`, `lib/zones.ts` | The zones (garden, cottage interior): each one's scene, spawn points and exits, and which one is showing |
 | `components/zones/HouseZone.tsx`, `lib/house.ts` | The cottage's interior and its layout |
 | `components/zones/HouseKeepsakes.tsx`, `components/ui/Keepsakes.tsx` | The photo wall, notes board and letter shelf in the room, and the panels they open |
-| `lib/keepsakes.ts`, `lib/notes.ts` | Which keepsake panel is open, opened letters and their photos; the shared notes board |
+| `lib/keepsakes.ts`, `lib/notes.ts`, `lib/housePhotos.ts` | Which keepsake panel is open, opened letters and the photo wall's photos; the shared notes board; photos hung in the cottage |
 | `components/ui/PartnerStatus.tsx`, `components/ui/ZoneFade.tsx` | Where the other person is; the fade when you go through a door |
 | `components/garden/Cottage.tsx`, `lib/procession.ts` | The cottage outside the gate, its path, and the intro's walk and camera shots (runs after "Enter the garden"; there's a Skip intro link) |
 | `components/garden/GardenerBody.tsx`, `lib/wander.ts` | How the gardeners are built from simple shapes, and where they're allowed to walk |

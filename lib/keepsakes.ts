@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { memories } from "@/data/memories";
 import { FLOWER_REGISTRY, type FlowerType } from "@/lib/flowerSpecs";
 import { useGardenStore } from "@/lib/gardenStore";
+import { useHousePhotos } from "@/lib/housePhotos";
 import { usePlantStore } from "@/lib/plantStore";
 import { plantKind } from "@/lib/plants";
 
@@ -83,20 +84,38 @@ export interface WallPhoto {
   id: string;
   src: string;
   alt: string;
+  /** Where it came from: a letter's photo, or one hung straight on the wall. */
+  origin: "letter" | "house";
+  /** The letter's label, or the photo's own caption (which may be empty). */
   label: string;
+  /** Who planted the letter or hung the photo, and when; original letters have neither. */
+  by?: string;
+  on?: string;
 }
 
-/** Photos from the letters opened so far, newest letters first: the photo wall never shows one from an unopened letter. */
+/**
+ * Everything on the photo wall, newest first: photos hung in the cottage, and
+ * photos from letters opened so far (never one from an unopened letter). The
+ * original letters' photos, which have no date, go last.
+ */
 export function useWallPhotos(): WallPhoto[] {
   const letters = useOpenedLetters();
-  return useMemo(
-    () =>
-      letters
-        .filter((l) => l.photo)
-        .map((l) => ({ id: l.id, src: l.photo!.src, alt: l.photo!.alt, label: l.label }))
-        .reverse(),
-    [letters],
-  );
+  const housePhotos = useHousePhotos((s) => s.photos);
+  return useMemo(() => {
+    const fromLetters: WallPhoto[] = letters
+      .filter((l) => l.photo)
+      .map((l) => ({ id: l.id, src: l.photo!.src, alt: l.photo!.alt, origin: "letter", label: l.label, by: l.by, on: l.on }));
+    const hung: WallPhoto[] = housePhotos.map((p) => ({
+      id: p.id,
+      src: p.url,
+      alt: p.caption ? p.caption : `A photo from ${p.uploaded_by}`,
+      origin: "house",
+      label: p.caption ?? "",
+      by: p.uploaded_by,
+      on: p.created_at,
+    }));
+    return [...hung, ...fromLetters].sort((a, b) => (b.on ?? "").localeCompare(a.on ?? ""));
+  }, [letters, housePhotos]);
 }
 
 /** The colour a letter's flower glows, for a small dot beside it in lists. */

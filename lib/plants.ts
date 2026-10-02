@@ -149,9 +149,12 @@ function extensionFor(blob: Blob, name: string) {
   return (fromName || blob.type.split("/")[1] || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/** Uploads a photo or voice note to Supabase Storage and returns its public URL. */
-export async function uploadMedia(file: File, folder: "photos" | "audio") {
-  const body = folder === "photos" ? await shrinkPhoto(file) : file;
+/**
+ * Uploads a photo or voice note to Supabase Storage and returns its public URL.
+ * `photos` and `audio` are for planted letters; `house-photos` for the cottage's photo wall.
+ */
+export async function uploadMedia(file: File, folder: "photos" | "audio" | "house-photos") {
+  const body = folder === "audio" ? file : await shrinkPhoto(file);
   const path = `${folder}/${crypto.randomUUID()}.${extensionFor(body, file.name)}`;
   const bucket = supabase.storage.from(MEDIA_BUCKET);
   const { error } = await bucket.upload(path, body, {

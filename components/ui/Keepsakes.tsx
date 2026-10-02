@@ -14,10 +14,11 @@ import {
   useWallPhotos,
   type WallPhoto,
 } from "@/lib/keepsakes";
+import { CAPTION_MAX, uploadHousePhoto } from "@/lib/housePhotos";
 import { NOTE_MAX, type Note, pinNote, useNotes } from "@/lib/notes";
 import { planting } from "@/lib/plantStore";
 import { usePresence } from "@/lib/presence";
-import { Gate, GhostButton, INPUT, PrimaryButton } from "./PlantPanel";
+import { FilePicker, Gate, GhostButton, INPUT, PrimaryButton } from "./PlantPanel";
 
 /**
  * The panels the cottage's keepsakes open: the photo wall's gallery, the notes
@@ -105,7 +106,7 @@ function Sheet({ which }: { which: Keepsake }) {
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-7 pt-4 sm:px-8">
-          {which === "photos" && <PhotoGallery escape={escape} />}
+          {which === "photos" && <PhotoGallery escape={escape} titleId={titleId} />}
           {which === "notes" && <NotesBoard titleId={titleId} />}
           {which === "archive" && <LetterArchive />}
         </div>
@@ -118,9 +119,15 @@ function Empty({ children }: { children: ReactNode }) {
   return <p className="py-8 text-center text-[1rem] leading-relaxed text-ink/65">{children}</p>;
 }
 
-function PhotoGallery({ escape }: { escape: { current: (() => boolean) | null } }) {
+/** What a photo says under it: a letter's label, or a hung photo's caption (or who hung it). */
+function photoTitle(photo: WallPhoto) {
+  return photo.label || `from ${photo.by}`;
+}
+
+function PhotoGallery({ escape, titleId }: { escape: { current: (() => boolean) | null }; titleId: string }) {
   const photos = useWallPhotos();
   const [showing, setShowing] = useState<number | null>(null);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     escape.current = () => {
@@ -140,12 +147,26 @@ function PhotoGallery({ escape }: { escape: { current: (() => boolean) | null } 
     };
   }, [escape, showing, photos.length]);
 
-  if (photos.length === 0) {
-    return <Empty>No photos on the wall yet. When you open a letter with a photo in it, the photo is hung here.</Empty>;
-  }
-
   return (
     <>
+      <div className="mb-4">
+        {adding ? (
+          <div className="rounded-[2px] bg-white/70 p-4 ring-1 ring-ink/10">
+            <AddPhoto titleId={`${titleId}-add`} onDone={() => setAdding(false)} />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="rounded-full border border-dashed border-ink/30 px-4 py-2 text-[0.9rem] text-ink/75 transition-colors hover:border-ink/60 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose"
+          >
+            + Add a photo
+          </button>
+        )}
+      </div>
+      {photos.length === 0 && (
+        <Empty>No photos on the wall yet. Add one, or open a letter with a photo in it and it&rsquo;s hung here too.</Empty>
+      )}
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {photos.map((photo, i) => (
           <li key={photo.id}>
@@ -157,7 +178,7 @@ function PhotoGallery({ escape }: { escape: { current: (() => boolean) | null } 
               <span className="relative block aspect-square overflow-hidden bg-ink/5">
                 <Image src={photo.src} alt={photo.alt} fill sizes="(min-width: 640px) 14rem, 45vw" unoptimized className="object-cover" />
               </span>
-              <span className="mt-1.5 block truncate px-0.5 font-hand text-[1.05rem] leading-tight text-ink/80">{photo.label}</span>
+              <span className="mt-1.5 block truncate px-0.5 font-hand text-[1.05rem] leading-tight text-ink/80">{photoTitle(photo)}</span>
             </button>
           </li>
         ))}
@@ -191,7 +212,14 @@ function Lightbox({ photo, count, onClose, onStep }: { photo: WallPhoto; count: 
         <div className="relative h-[min(72dvh,46rem)] w-full">
           <Image key={photo.id} src={photo.src} alt={photo.alt} fill sizes="90vw" unoptimized className="object-contain" />
         </div>
-        <figcaption className="mt-3 text-center font-hand text-[1.4rem] text-moon">{photo.label}</figcaption>
+        <figcaption className="mt-3 text-center">
+          {photo.label && <span className="block font-hand text-[1.4rem] leading-snug text-moon">{photo.label}</span>}
+          <span className="mt-0.5 block text-[0.85rem] text-moon/60">
+            {photo.origin === "letter"
+              ? `from a letter${photo.by ? `, planted by ${photo.by}` : ""}`
+              : `hung by ${photo.by} · ${formatDate(photo.on!)}`}
+          </span>
+        </figcaption>
       </figure>
       <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
         {count > 1 && (
@@ -340,6 +368,89 @@ function NoteForm() {
           <GhostButton onClick={closeKeepsake}>Close</GhostButton>
           <PrimaryButton disabled={busy || !message.trim() || !author.trim()}>{busy ? "Pinning…" : "Pin it"}</PrimaryButton>
         </div>
+      </div>
+    </form>
+  );
+}
+
+/** Hanging a photo of your own: the passcode once per device, then a photo and an optional caption. */
+function AddPhoto({ titleId, onDone }: { titleId: string; onDone: () => void }) {
+  const [unlocked, setUnlocked] = useState(planting.isUnlocked);
+  const me = usePresence((s) => s.me);
+  const [name, setName] = useState(() => me ?? planting.savedName());
+  const [file, setFile] = useState<File | null>(null);
+  const [caption, setCaption] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const id = useId();
+
+  if (!unlocked) {
+    return (
+      <Gate
+        titleId={titleId}
+        title="Hang a photo"
+        prompt="Whisper our passcode to hang photos here."
+        onUnlock={() => {
+          planting.rememberUnlock();
+          setUnlocked(true);
+        }}
+        onCancel={onDone}
+      />
+    );
+  }
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!file || !name.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await uploadHousePhoto(name, file, caption);
+      if (!me) planting.saveName(name.trim());
+      onDone();
+    } catch {
+      setError("The photo wouldn't upload. Check the connection and try again?");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit}>
+      <p id={titleId} className="font-hand text-[1.35rem] leading-none">
+        Hang a photo
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <FilePicker label="Choose a photo" accept="image/*" file={file} onChange={setFile} onError={setError} disabled={busy} />
+      </div>
+      <input
+        id={`${id}-caption`}
+        aria-label="Caption (optional)"
+        value={caption}
+        maxLength={CAPTION_MAX}
+        onChange={(e) => setCaption(e.target.value)}
+        placeholder="A caption, if you like"
+        className={`${INPUT} font-hand text-[1.15rem]`}
+        disabled={busy}
+      />
+      {!me && (
+        <input
+          aria-label="Your name"
+          value={name}
+          maxLength={40}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Your name"
+          className={INPUT}
+          disabled={busy}
+        />
+      )}
+      <p role="alert" className="mt-1.5 min-h-[1.1rem] text-[0.85rem] text-[#a3324f]">
+        {error}
+      </p>
+      <div className="flex items-center justify-end gap-1">
+        <GhostButton onClick={onDone} disabled={busy}>
+          Cancel
+        </GhostButton>
+        <PrimaryButton disabled={busy || !file || !name.trim()}>{busy ? "Hanging it…" : "Hang it"}</PrimaryButton>
       </div>
     </form>
   );

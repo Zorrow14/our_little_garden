@@ -14,6 +14,7 @@ import PlayerControls from "@/components/ui/PlayerControls";
 import WhoAreYou from "@/components/ui/WhoAreYou";
 import ZoneFade from "@/components/ui/ZoneFade";
 import { STORAGE_KEY, useGardenStore } from "@/lib/gardenStore";
+import { startHousePhotoSync } from "@/lib/housePhotos";
 import { startMusic } from "@/lib/music";
 import { startNoteSync } from "@/lib/notes";
 import { startPlantSync } from "@/lib/plantStore";
@@ -66,6 +67,8 @@ export default function GardenExperience() {
   useEffect(() => startPresence(), []);
   // The notes board inside the cottage.
   useEffect(() => startNoteSync(), []);
+  // Photos hung on the cottage's photo wall.
+  useEffect(() => startHousePhotoSync(), []);
 
   return (
     <MotionConfig reducedMotion="user">

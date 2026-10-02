@@ -328,7 +328,8 @@ function Field({ label, htmlFor, children }: { label: string; htmlFor: string; c
   );
 }
 
-function FilePicker({
+/** Picks one photo or audio file, under the storage bucket's size limit. */
+export function FilePicker({
   label,
   accept,
   file,
