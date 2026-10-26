@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Literata, Nothing_You_Could_Do } from "next/font/google";
+import { Literata, Noto_Sans_Myanmar, Nothing_You_Could_Do } from "next/font/google";
 import "./globals.css";
 
 // A book face for reading the letters, and a real-looking hand for everything written "by hand".
@@ -13,6 +13,15 @@ const hand = Nothing_You_Could_Do({
   subsets: ["latin"],
   weight: "400",
   variable: "--font-hand",
+});
+
+// Burmese, for festival greetings. Not preloaded: the browser only fetches it when Burmese text appears.
+const myanmar = Noto_Sans_Myanmar({
+  subsets: ["myanmar"],
+  weight: ["400", "600"],
+  variable: "--font-myanmar",
+  preload: false,
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -36,7 +45,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${serif.variable} ${hand.variable} font-serif`}>{children}</body>
+      <body className={`${serif.variable} ${hand.variable} ${myanmar.variable} font-serif`}>{children}</body>
     </html>
   );
 }

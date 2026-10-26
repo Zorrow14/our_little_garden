@@ -4,6 +4,7 @@ import { Stars } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import { festivalGlow } from "@/components/garden/festival/glow";
 import { garden, SATURATION_GLSL, sharedUniforms } from "@/lib/growth";
 import { MOON_DIRECTION } from "@/lib/layout";
 import { night } from "@/lib/stargazing";
@@ -21,6 +22,14 @@ const MIDNIGHT = {
   horizon: new THREE.Color("#0d1030"),
   below: new THREE.Color("#04060f"),
 };
+
+/** A festival's dusk colours, made once each. */
+const festiveSkies = new Map<string, { top: THREE.Color; horizon: THREE.Color; below: THREE.Color }>();
+function skyFor(id: string, sky: { top: string; horizon: string; below: string }) {
+  let c = festiveSkies.get(id);
+  if (!c) festiveSkies.set(id, (c = { top: new THREE.Color(sky.top), horizon: new THREE.Color(sky.horizon), below: new THREE.Color(sky.below) }));
+  return c;
+}
 
 const vertexShader = /* glsl */ `
   varying vec3 vDirection;
@@ -74,6 +83,15 @@ export default function Sky() {
     u.uTop.value.lerpColors(PALETTE.top[0], PALETTE.top[1], g);
     u.uHorizon.value.lerpColors(PALETTE.horizon[0], PALETTE.horizon[1], g);
     u.uBelow.value.lerpColors(PALETTE.below[0], PALETTE.below[1], g);
+    // A festival warms the evening toward dusk (less so under the stars on the hill).
+    const festival = festivalGlow.festival;
+    const warm = festivalGlow.amount * (1 - 0.7 * night.amount);
+    if (festival && warm > 0) {
+      const c = skyFor(festival.id, festival.theme.sky);
+      u.uTop.value.lerp(c.top, warm);
+      u.uHorizon.value.lerp(c.horizon, warm);
+      u.uBelow.value.lerp(c.below, warm);
+    }
     if (night.amount > 0) {
       u.uTop.value.lerp(MIDNIGHT.top, night.amount);
       u.uHorizon.value.lerp(MIDNIGHT.horizon, night.amount);

@@ -3,12 +3,15 @@
 import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import * as THREE from "three";
+import { stepFestivalGlow } from "@/components/garden/festival/glow";
+import { useFestival } from "@/lib/festivals";
 import { bloomedLetterCount, LETTER_IDS, useGardenStore } from "@/lib/gardenStore";
 import { garden, sharedUniforms } from "@/lib/growth";
 
 /**
  * Eases the garden's growth toward the share of letters read, and advances the
  * shared shader clock and breeze. Everything that grows reads `garden.growth` each frame.
+ * Also eases the festival's glow in and out (`festivalGlow`).
  */
 export default function GrowthDriver() {
   const hydrated = useGardenStore((s) => s.hydrated);
@@ -28,6 +31,7 @@ export default function GrowthDriver() {
     sharedUniforms.uSaturation.value = 0.45 + 0.55 * garden.growth;
     // A gentle breeze that rises and falls in slow, overlapping gusts.
     sharedUniforms.uWind.value = 0.75 + 0.3 * Math.sin(t * 0.23) + 0.15 * Math.sin(t * 0.61 + 1.3);
+    stepFestivalGlow(useFestival.getState().festival, dt);
   });
 
   return null;

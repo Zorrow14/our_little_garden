@@ -8,7 +8,7 @@ import { COTTAGE, DOOR, INTRO_SHOTS, PROCESSION } from "@/lib/procession";
 import { GARDEN_BRIDGE } from "@/lib/props";
 import { createRandom, groundHeight } from "@/lib/terrain";
 
-interface Tree {
+export interface Tree {
   x: number;
   z: number;
   scale: number;
@@ -47,18 +47,21 @@ export interface TreeRing {
   clearing: (x: number, z: number) => boolean;
 }
 
-const GARDEN_RING: TreeRing = { seed: 7, count: TREE_COUNT, inner: RING_INNER, depth: RING_DEPTH, height: groundHeight, clearing: inClearing };
+export const GARDEN_RING: TreeRing = { seed: 7, count: TREE_COUNT, inner: RING_INNER, depth: RING_DEPTH, height: groundHeight, clearing: inClearing };
+
+/** Where a ring's trees stand. Pure, so the festival can hang lanterns in the same trees. */
+export function ringTrees(ring: TreeRing): Tree[] {
+  const rand = createRandom(ring.seed);
+  return Array.from({ length: ring.count }, (_, i): Tree => {
+    const a = ((i + rand() * 0.8) / ring.count) * Math.PI * 2;
+    const r = ring.inner + rand() * ring.depth;
+    return { x: Math.cos(a) * r, z: Math.sin(a) * r, scale: 1.2 + rand() * 1, lean: (rand() - 0.5) * 0.12 };
+  }).filter((t) => !ring.clearing(t.x, t.z));
+}
 
 export default function Trees({ ring = GARDEN_RING }: { ring?: TreeRing }) {
   const groundHeight = ring.height;
-  const trees = useMemo(() => {
-    const rand = createRandom(ring.seed);
-    return Array.from({ length: ring.count }, (_, i): Tree => {
-      const a = ((i + rand() * 0.8) / ring.count) * Math.PI * 2;
-      const r = ring.inner + rand() * ring.depth;
-      return { x: Math.cos(a) * r, z: Math.sin(a) * r, scale: 1.2 + rand() * 1, lean: (rand() - 0.5) * 0.12 };
-    }).filter((t) => !ring.clearing(t.x, t.z));
-  }, [ring]);
+  const trees = useMemo(() => ringTrees(ring), [ring]);
 
   // Each canopy is a cluster of three or four low-poly blobs.
   const blobs = useMemo(() => {

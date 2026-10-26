@@ -4,12 +4,17 @@ import { Stats } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 import * as THREE from "three";
+import { festivalGlow } from "@/components/garden/festival/glow";
+import { useLamps } from "@/lib/festivalLamps";
+import { useFestival } from "@/lib/festivals";
+import { fireworkQueue, useFireworkView, useLightTogether } from "@/lib/fireworks";
 import { useGardenStore } from "@/lib/gardenStore";
 import { useHousePhotos } from "@/lib/housePhotos";
 import { useKeepsakes } from "@/lib/keepsakes";
 import { useMail } from "@/lib/mailbox";
 import { useNotes } from "@/lib/notes";
 import { player } from "@/lib/playerInput";
+import { bowSignals } from "@/lib/presence";
 import { usePlantStore } from "@/lib/plantStore";
 import { SEATS, seated, seatRequest } from "@/lib/props";
 import { night, useStargazing } from "@/lib/stargazing";
@@ -42,7 +47,15 @@ export default function DebugInfo() {
         mail: useMail,
         keepsakes: useKeepsakes,
         stargazing: useStargazing,
+        festival: useFestival,
+        lamps: useLamps,
+        lightTogether: useLightTogether,
+        fireworkView: useFireworkView,
       },
+      /** The festival: its glow, fireworks waiting to go up, and bows. Stage lamps through `stores.lamps.receive`, never the table. */
+      festivalGlow,
+      fireworkQueue,
+      bowSignals,
       /** The garden's seats, who's sitting where, and how far night has fallen for stargazing. */
       seats: SEATS,
       seated,

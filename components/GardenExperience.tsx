@@ -3,6 +3,8 @@
 import { MotionConfig } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useEffect } from "react";
+import FestivalGreeting from "@/components/ui/FestivalGreeting";
+import FestivalMenu from "@/components/ui/FestivalMenu";
 import GardenHud from "@/components/ui/GardenHud";
 import IntroOverlay from "@/components/ui/IntroOverlay";
 import Keepsakes from "@/components/ui/Keepsakes";
@@ -14,6 +16,10 @@ import PlayerControls from "@/components/ui/PlayerControls";
 import WhoAreYou from "@/components/ui/WhoAreYou";
 import ZoneFade from "@/components/ui/ZoneFade";
 import { STORAGE_KEY, useGardenStore } from "@/lib/gardenStore";
+import { startLampSync } from "@/lib/festivalLamps";
+import { startFestivalClock } from "@/lib/festivals";
+import { startFireworkSync } from "@/lib/fireworks";
+import { loadFireworkSound } from "@/lib/fireworkSound";
 import { startHousePhotoSync } from "@/lib/housePhotos";
 import { startMailSync } from "@/lib/mailbox";
 import { startMusic } from "@/lib/music";
@@ -31,6 +37,7 @@ const GardenCanvas = dynamic(() => import("@/components/garden/GardenCanvas"), {
  *   ?debug      show an FPS meter
  *   ?reset      forget which letters have been opened
  *   ?skipintro  go straight to the garden
+ *   ?festival=thadingyut  dress the garden for a festival whatever the date (?festival=off: never)
  */
 function applyUrlFlags() {
   const params = new URLSearchParams(window.location.search);
@@ -72,6 +79,11 @@ export default function GardenExperience() {
   useEffect(() => startHousePhotoSync(), []);
   // Letters in the mailbox by the gate.
   useEffect(() => startMailSync(), []);
+  // Whether a festival is on (by the date, or ?festival=), checked every minute; its lamps; fireworks from the other device.
+  useEffect(() => startFestivalClock(), []);
+  useEffect(() => startLampSync(), []);
+  useEffect(() => startFireworkSync(), []);
+  useEffect(() => loadFireworkSound(), []);
 
   return (
     <MotionConfig reducedMotion="user">
@@ -86,6 +98,8 @@ export default function GardenExperience() {
         <Keepsakes />
         <LetterModal />
         <PartnerStatus />
+        <FestivalMenu />
+        <FestivalGreeting />
         <ZoneFade />
         <IntroOverlay />
         <WhoAreYou />

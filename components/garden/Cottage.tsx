@@ -45,7 +45,14 @@ interface Part {
   rotation?: [number, number, number];
 }
 
+/** The roof's pitch, overhang and rise above the walls, for lights along its edges. */
+export const COTTAGE_ROOF = { pitch: PITCH, eave: EAVE, rise: RISE };
+
 /** From the cottage's own space (origin at floor level in the middle, door toward +z) to world space. */
+export function cottageToWorld(x: number, z: number) {
+  return toWorld(x, z);
+}
+
 function toWorld(x: number, z: number) {
   const c = Math.cos(COTTAGE.yaw);
   const s = Math.sin(COTTAGE.yaw);

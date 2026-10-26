@@ -6,6 +6,7 @@ import { useReducedMotion } from "framer-motion";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { useFireworkView } from "@/lib/fireworks";
 import { FINAL_ID, useGardenStore } from "@/lib/gardenStore";
 import { gsap } from "@/lib/gsap";
 import { flowerAnchors } from "@/lib/layout";
@@ -56,6 +57,24 @@ function stargazePose(aspect: number): Pose {
   return introShot(position, target, aspect);
 }
 
+/**
+ * Watching fireworks: from about where the camera is, a little lower, looking
+ * up at the sky over `focus` where they'll burst. The garden's usual view
+ * looks down and shows hardly any sky.
+ */
+function fireworkPose(focus: { x: number; z: number }, from: THREE.Vector3): Pose {
+  const ground = groundHeight(focus.x, focus.z);
+  const target = new THREE.Vector3(focus.x, ground + 7.5, focus.z);
+  const away = from.clone().sub(target).setY(0);
+  if (away.lengthSq() < 1e-4) away.set(0, 0, 1);
+  // Not too close beneath them (it'd be looking straight up), nor too far back.
+  const distance = THREE.MathUtils.clamp(away.length(), 9, 15);
+  away.normalize();
+  const position = new THREE.Vector3(focus.x, 0, focus.z).addScaledVector(away, distance);
+  position.y = groundHeight(position.x, position.z) + 3.2;
+  return { position, target };
+}
+
 /** Where the camera looks while trailing the gardeners: their heads, and the gate as they reach it. */
 const LOOK_ABOVE_FEET = new THREE.Vector3(0, 0.75, 0);
 const GATE_TARGET = new THREE.Vector3(GATE.x, groundHeight(GATE.x, GATE.z) + 0.75, GATE.z);
@@ -87,6 +106,9 @@ export default function CameraRig() {
   const beforeFocus = useRef<Pose | null>(null);
   /** Where it was before tipping up to the stars. */
   const beforeStars = useRef<Pose | null>(null);
+  /** Where it was before looking up at fireworks; dropped if you take the camera yourself meanwhile. */
+  const beforeFireworks = useRef<Pose | null>(null);
+  const watchingFireworks = useFireworkView((s) => s.focus !== null);
   const flight = useRef<gsap.core.Timeline | null>(null);
   const introPhase = useRef<"reveal" | "follow" | "settle" | "done">("done");
   const focus = useMemo(() => new THREE.Vector3(), []);
@@ -247,6 +269,38 @@ export default function CameraRig() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stars]);
 
+  // Up to watch your firework, or the finale of lighting together; back down to where you were once it's over.
+  useEffect(() => {
+    if (stage !== "garden" || introPhase.current !== "done") return;
+    const c = controls.current;
+    if (watchingFireworks) {
+      const g = useGardenStore.getState();
+      if (g.activeId || g.celebrating || useStargazing.getState().on) return;
+      const { focus } = useFireworkView.getState();
+      if (!focus) return;
+      beforeFireworks.current ??= { position: camera.position.clone(), target: c.target.clone() };
+      flyTo(fireworkPose(focus, camera.position), 1.4, release);
+      // Turning the camera yourself while they're going off keeps it where you put it.
+      const keep = () => {
+        if (c.enabled) beforeFireworks.current = null;
+      };
+      c.addEventListener("start", keep);
+      // Done watching once the last one's had time to fade.
+      const timer = setInterval(() => {
+        if (Date.now() > useFireworkView.getState().until) useFireworkView.setState({ focus: null });
+      }, 250);
+      return () => {
+        c.removeEventListener("start", keep);
+        clearInterval(timer);
+      };
+    }
+    const back = beforeFireworks.current;
+    beforeFireworks.current = null;
+    if (back) flyTo(back, 1.8, release);
+    // flyTo and release only read refs and stable values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchingFireworks]);
+
   const pull = portraitPull(aspect);
   return (
     <OrbitControls
@@ -262,7 +316,7 @@ export default function CameraRig() {
       maxDistance={14.5 * pull}
       minPolarAngle={0.5}
       // Stargazing, the view may tip up past level to look at the sky.
-      maxPolarAngle={stars ? 1.85 : 1.32}
+      maxPolarAngle={stars || watchingFireworks ? 1.85 : 1.32}
     />
   );
 }

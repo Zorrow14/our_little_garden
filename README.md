@@ -103,6 +103,25 @@ This runs on a Supabase Realtime channel (`garden-live`):
 
 Nothing is stored. There's no login: the name is just a choice on each device.
 
+## Festivals
+
+While a festival is on, the garden is dressed for it. Thadingyut, the Festival of Lights, runs from 25 to 28 October 2026 in Myanmar time, a day longer than the festival itself.
+
+- **The garden:**
+  - The evening warms to dusk.
+  - Strings of lights run along the fence, the cottage's roof and the bridge's rails.
+  - Paper lanterns hang along the fence, under the gateways, at the cottage and in a few trees at the back.
+  - Candles line the paths, and the cottage windows glow.
+- **The greeting:** on the way in, the garden greets you with "သီတင်းကျွတ်ပွဲတော် မင်္ဂလာရှိပါစေ" and "Happy Thadingyut", once per visit.
+- **The festival menu:** the lantern button, bottom right, has the rest:
+  - **Light a lamp:** a little clay oil lamp, lit just in front of your gardener (it floats if you're on the pond), with a few words if you like. It's behind the same passcode as the notes board. Each of you can light up to 30. The other person sees it appear straight away, and hovering or tapping one shows who lit it and what for. They're kept in the Supabase table `festival_lamps`; to remove one, delete its row in the dashboard.
+  - **Launch a firework:** one goes up over your gardener (at most one every 2 seconds), and the view looks up to watch. The other person sees it too, if they're in the garden. A few also go up on their own now and then.
+  - **Light together:** both of you press it within about 10 seconds. A bigger show of fireworks plays on both screens and every lantern brightens. After you press, it says who it's waiting for, and lets you know if the time runs out.
+  - **Pay respects:** your gardener bows with hands together, and the other person gets a note.
+  - **Firework sounds:** off unless you turn them on. Always silent while the music is muted.
+- **Adding a festival:** add an entry to `FESTIVALS` in [`lib/festivals.ts`](lib/festivals.ts) (Tazaungdaing, say) with its dates and colours. Everything above follows on its own.
+- **Seeing it outside its dates:** add `?festival=thadingyut` to the URL, e.g. to try it out or show it after it's over. Use `?festival=off` to turn it off.
+
 ## Testing flags
 
 Add these to the URL:
@@ -112,6 +131,7 @@ Add these to the URL:
 | `?skipintro` | Skip the opening line and go straight to the garden |
 | `?reset` | Forget which letters have been opened on this device (progress is saved in the browser) |
 | `?debug` | Show an FPS meter, for checking performance on a phone |
+| `?festival=thadingyut` | Dress the garden for Thadingyut whatever the date (`?festival=off` for none) |
 
 Flags combine, e.g. `/?reset&skipintro`.
 
@@ -157,4 +177,6 @@ The site is public to anyone with its URL (it's hidden from search engines), so 
 | `components/garden/Cottage.tsx`, `lib/procession.ts` | The cottage outside the gate, its path, and the intro's walk and camera shots (runs after "Enter the garden"; there's a Skip intro link) |
 | `lib/props.ts`, `components/garden/props/` | The swing, dock, mailbox and stargazing hill: where they stand, sitting on them, and the starry night |
 | `lib/mailbox.ts`, `components/ui/MailboxPanel.tsx`, `lib/stargazing.ts` | Delayed letters in the mailbox; when the stars are out |
+| `lib/festivals.ts`, `components/garden/festival/` | The festivals, their dates and colours; the lights, lamps and fireworks in the garden |
+| `lib/festivalLamps.ts`, `lib/fireworks.ts`, `lib/fireworkSound.ts`, `components/ui/FestivalMenu.tsx`, `components/ui/FestivalGreeting.tsx`, `components/ui/LampPanel.tsx` | Lighting lamps, fireworks and lighting together, their sound, and the festival's menu, greeting and lamp panel |
 | `components/garden/GardenerBody.tsx`, `lib/wander.ts` | How the gardeners are built from simple shapes, and where they're allowed to walk |

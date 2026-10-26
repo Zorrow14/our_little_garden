@@ -8,9 +8,10 @@ import { isZone, useZone, ZONE_PLACES, type ZoneName } from "@/lib/zones";
  * The live garden: which of you is at the keyboard, who else is here right
  * now, which zone they're in, and where their gardener is walking. One
  * Supabase Realtime channel carries all of it (presence for who's online and
- * where, broadcast for movement, sitting, waves, and a nudge when a letter is
- * posted) and stays connected as you move between zones. Nothing here touches
- * the database.
+ * where, broadcast for movement, sitting, waves, a nudge when a letter is
+ * posted, and during a festival fireworks, lighting together and paying
+ * respects) and stays connected as you move between zones. Nothing here
+ * touches the database.
  */
 
 export const GARDENER_NAMES = ["Zorrow", "Skelly"] as const;
@@ -107,6 +108,43 @@ export const liveTracks = new Map<GardenerName, LiveTrack>();
 /** Bumped when someone waves at a gardener; the scene plays the wave when it sees the count change. */
 export const greetSignals = new Map<GardenerName, number>();
 
+/** Bumped when a gardener pays respects (a bow, hands together); the scene plays the bow when it sees the count change. */
+export const bowSignals = new Map<GardenerName, number>();
+
+/** A firework sent from the other device: where over the garden, which kind, which colour, and when. */
+export interface FireworkMessage {
+  x: number;
+  z: number;
+  style: number;
+  colorIndex: number;
+  sent: number;
+}
+
+/** "Light together" pressed on the other device, by whom, and when (on their clock). */
+export interface LightTogetherMessage {
+  from: GardenerName;
+  sent: number;
+}
+
+const fireworkListeners = new Set<(message: FireworkMessage) => void>();
+const lightTogetherListeners = new Set<(message: LightTogetherMessage) => void>();
+
+/** Called for each firework launched on the other device. */
+export function onFirework(listener: (message: FireworkMessage) => void) {
+  fireworkListeners.add(listener);
+  return () => {
+    fireworkListeners.delete(listener);
+  };
+}
+
+/** Called when the other person presses "Light together". */
+export function onLightTogether(listener: (message: LightTogetherMessage) => void) {
+  lightTogetherListeners.add(listener);
+  return () => {
+    lightTogetherListeners.delete(listener);
+  };
+}
+
 /** Updates are replayed this far behind real time, so there's nearly always a next one to move toward. */
 export const PLAYBACK_DELAY = 140;
 /** Their gardener goes back to pottering about if nothing's been heard for this long (e.g. their tab is hidden). */
@@ -173,6 +211,25 @@ function receiveGreet(payload: { to?: unknown; from?: unknown }) {
   if (payload.to === me && isGardener(payload.from) && payload.from !== me) {
     useGardenStore.setState({ notice: `${payload.from} waved at you.` });
   }
+}
+
+function receiveFirework(payload: Partial<FireworkMessage>) {
+  const { x, z, style, colorIndex, sent } = payload;
+  if (![x, z, style, colorIndex, sent].every(Number.isFinite)) return;
+  const message = { x: Math.max(-30, Math.min(30, x!)), z: Math.max(-30, Math.min(30, z!)), style: style! | 0, colorIndex: colorIndex! | 0, sent: sent! };
+  fireworkListeners.forEach((listener) => listener(message));
+}
+
+function receiveLightTogether(payload: { from?: unknown; sent?: unknown }) {
+  if (!isGardener(payload.from) || payload.from === usePresence.getState().me || !Number.isFinite(payload.sent)) return;
+  const message = { from: payload.from, sent: payload.sent as number };
+  lightTogetherListeners.forEach((listener) => listener(message));
+}
+
+function receiveRespects(payload: { from?: unknown }) {
+  if (!isGardener(payload.from) || payload.from === usePresence.getState().me) return;
+  bowSignals.set(payload.from, (bowSignals.get(payload.from) ?? 0) + 1);
+  useGardenStore.setState({ notice: `${payload.from} paid respects to you.` });
 }
 
 /** Called when the other person posts a letter, so the mailbox can check what's on its way. */
@@ -246,6 +303,9 @@ export function startPresence() {
     .on("broadcast", { event: "pose" }, ({ payload }) => receivePose(payload as PoseMessage))
     .on("broadcast", { event: "greet" }, ({ payload }) => receiveGreet(payload as { to?: unknown; from?: unknown }))
     .on("broadcast", { event: "mail" }, () => mailListeners.forEach((listener) => listener()))
+    .on("broadcast", { event: "firework" }, ({ payload }) => receiveFirework(payload as Partial<FireworkMessage>))
+    .on("broadcast", { event: "light-together" }, ({ payload }) => receiveLightTogether(payload as { from?: unknown; sent?: unknown }))
+    .on("broadcast", { event: "respects" }, ({ payload }) => receiveRespects(payload as { from?: unknown }))
     .subscribe((status) => {
       joined = status === "SUBSCRIBED";
       if (joined) {
@@ -289,4 +349,26 @@ export function sendGreet(to: GardenerName) {
 export function sendMailNudge() {
   if (!channel || !joined) return;
   void channel.send({ type: "broadcast", event: "mail", payload: {} });
+}
+
+/** Shows the other device a firework you've just launched. */
+export function sendFirework(message: FireworkMessage) {
+  if (!channel || !joined) return;
+  void channel.send({ type: "broadcast", event: "firework", payload: message });
+}
+
+/** Tells the other device you've pressed "Light together". Returns false if the channel isn't up. */
+export function sendLightTogether(sent: number) {
+  const { me } = usePresence.getState();
+  if (!channel || !joined || !me) return false;
+  void channel.send({ type: "broadcast", event: "light-together", payload: { from: me, sent } });
+  return true;
+}
+
+/** Your gardener bows here, and on the other device, which is told you paid respects. */
+export function payRespects() {
+  const { me } = usePresence.getState();
+  if (!me) return;
+  bowSignals.set(me, (bowSignals.get(me) ?? 0) + 1);
+  if (channel && joined) void channel.send({ type: "broadcast", event: "respects", payload: { from: me } });
 }

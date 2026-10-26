@@ -25,4 +25,6 @@ export const player = {
   x: 0,
   y: 0,
   z: 0,
+  /** Which way they're facing: forward is (sin yaw, cos yaw). */
+  yaw: 0,
 };

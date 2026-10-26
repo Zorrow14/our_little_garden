@@ -23,6 +23,7 @@ const config: Config = {
       fontFamily: {
         serif: ["var(--font-serif)", "Georgia", "serif"],
         hand: ["var(--font-hand)", "cursive"],
+        myanmar: ["var(--font-myanmar)", "Myanmar Text", "Padauk", "sans-serif"],
       },
       boxShadow: {
         letter: "0 40px 80px -30px rgba(3, 5, 18, 0.85), 0 16px 30px -18px rgba(3, 5, 18, 0.6)",

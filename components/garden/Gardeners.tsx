@@ -10,7 +10,7 @@ import { useGardenStore } from "@/lib/gardenStore";
 import { useKeepsakes } from "@/lib/keepsakes";
 import { player, readMove } from "@/lib/playerInput";
 import { usePlantStore } from "@/lib/plantStore";
-import { type GardenerName, greetSignals, livePose, markWalked, sendGreet, sendPose, usePresence } from "@/lib/presence";
+import { bowSignals, type GardenerName, greetSignals, livePose, markWalked, sendGreet, sendPose, usePresence } from "@/lib/presence";
 import { AT_DOOR, DOOR, OFF_DOORSTEP, onProcession, PROCESSION_LENGTH, procession } from "@/lib/procession";
 import { type Seat, type SeatProp, seatById, seated, seatPose, seatRequest, SEATS, SIT_REACH, sittingTogether } from "@/lib/props";
 import { createRandom } from "@/lib/terrain";
@@ -140,6 +140,8 @@ const SEND_RATE = 12;
 const HEARTBEAT = 2;
 /** How long a wave lasts. */
 const WAVE_TIME = 2.4;
+/** Seconds a bow lasts: down, held, and up again. */
+const BOW_TIME = 2.6;
 /** Seconds to hop up onto a seat, or down off it. */
 const SIT_TIME = 0.5;
 
@@ -171,6 +173,9 @@ interface Walker {
   /** Seconds since the wave began, and seconds of it left. */
   greetTime: number;
   waving: number;
+  /** Seconds of a bow (paying respects, hands together) left, and 0..1 into it. */
+  bowing: number;
+  bow: number;
   /** Smoothed speed of a remote gardener, from how far they move each frame. */
   remotePace: number;
   /** Seconds since the last live update went out, and what it said. */
@@ -229,6 +234,7 @@ function Gardener({
   const [greetings, setGreetings] = useState(0);
   /** The last wave signal seen from the other device. */
   const seenSignal = useRef(greetSignals.get(name) ?? 0);
+  const seenBow = useRef(bowSignals.get(name) ?? 0);
   useCursor(hovered && interactive);
 
   /** Where this gardener potters about at home while their owner is away. */
@@ -263,6 +269,8 @@ function Gardener({
       greeting: 0,
       greetTime: 0,
       waving: 0,
+      bowing: 0,
+      bow: 0,
       remotePace: 0,
       sinceSent: Infinity,
       sentPace: 0,
@@ -290,6 +298,17 @@ function Gardener({
     w.waving = WAVE_TIME;
     w.greetTime = 0;
     setGreetings((n) => n + 1);
+  };
+
+  /** Paying respects: a slow bow with hands together. Like a wave, a wanderer stops for it. */
+  const startBow = () => {
+    const w = walker;
+    if (w.mode === "idle" || w.mode === "walk" || w.mode === "greet") {
+      w.mode = "greet";
+      w.timer = BOW_TIME;
+    }
+    w.waving = 0;
+    w.bowing = BOW_TIME;
   };
 
   // Which arm is free to wave, swing and reach: the one not carrying anything. The character's left is +x.
@@ -434,6 +453,13 @@ function Gardener({
     }
     w.waving = Math.max(0, w.waving - dt);
     w.greetTime += dt;
+    // They paid respects, here or on the other device.
+    const bowSignal = bowSignals.get(name) ?? 0;
+    if (bowSignal !== seenBow.current) {
+      seenBow.current = bowSignal;
+      startBow();
+    }
+    w.bowing = Math.max(0, w.bowing - dt);
 
     if (w.mode === "player") {
       const g = useGardenStore.getState();
@@ -498,11 +524,16 @@ function Gardener({
           pace = Math.hypot(next.x - w.pos.x, next.z - w.pos.z) / dt;
           w.pos = next;
           w.waving = 0;
+          w.bowing = 0;
           markWalked();
           if (hoveredRef.current) setHover(false);
         }
       } else if (w.waving > 0) {
         facing = Math.atan2(state.camera.position.x - w.pos.x, state.camera.position.z - w.pos.z);
+      } else if (w.bowing > 0) {
+        // Toward the other gardener, if they're here; otherwise toward you.
+        const to = other ? other.pos : { x: state.camera.position.x, z: state.camera.position.z };
+        facing = Math.atan2(to.x - w.pos.x, to.z - w.pos.z);
       }
       // Walked into a doorway: through to the zone beyond.
       const exit = zoneDefinition(w.zone).exits.find((e) => Math.hypot(e.at.x - w.pos.x, e.at.z - w.pos.z) < e.radius);
@@ -674,6 +705,7 @@ function Gardener({
       player.x = w.pos.x;
       player.y = w.y;
       player.z = w.pos.z;
+      player.yaw = w.yaw;
     }
     if (name === me && (w.mode === "player" || w.mode === "intro-walk")) {
       // Tell the other device: steadily while walking or turning, and now and then while standing so they know you're still here.
@@ -703,6 +735,8 @@ function Gardener({
     w.moving = damp(w.moving, pace > 0.01 ? 1 : 0, 8, dt);
     w.tending = damp(w.tending, w.mode === "idle" && w.tend ? 1 : 0, 2.5, dt);
     w.greeting = damp(w.greeting, w.waving > 0 ? 1 : 0, 7, dt);
+    // Down slowly, held, and up again before the time's out.
+    w.bow = damp(w.bow, w.bowing > 0.5 ? 1 : 0, 4, dt);
     w.phase += ((pace * dt) / (stride * THREE.MathUtils.clamp(pace / speed, 1, 1.5))) * Math.PI;
     const swing = Math.sin(w.phase) * w.moving;
     const still = 1 - w.moving;
@@ -768,6 +802,21 @@ function Gardener({
     carrying.rotation.z = -freeSide * ((watering ? 0.2 : 0.34) + Math.sin(t * 1.3 + seed) * 0.02 * still);
     // The can tips forward to pour, then settles back; the basket sways with each step.
     rig.prop.rotation.x = watering ? 1.9 * w.tending : Math.sin(w.phase) * 0.12 * w.moving;
+
+    // Paying respects: both hands brought together in front of the chest, a bow from the waist, head lowered.
+    // Whatever they carry is set aside for it.
+    const bow = w.bow;
+    if (bow > 0.001) {
+      const lerp = THREE.MathUtils.lerp;
+      rig.upper.rotation.x = lerp(rig.upper.rotation.x, 0.5 * (1 - sitting * 0.6), bow);
+      rig.head.rotation.x = lerp(rig.head.rotation.x, 0.32, bow);
+      rig.head.rotation.y *= 1 - bow;
+      free.rotation.x = lerp(free.rotation.x, -1.45, bow);
+      free.rotation.z = lerp(free.rotation.z, -freeSide * 0.72, bow);
+      carrying.rotation.x = lerp(carrying.rotation.x, -1.45, bow);
+      carrying.rotation.z = lerp(carrying.rotation.z, freeSide * 0.72, bow);
+    }
+    rig.prop.scale.setScalar(Math.max(0.001, 1 - bow));
 
     if (rig.water && rig.spout) {
       const pouring = w.tending > 0.8;

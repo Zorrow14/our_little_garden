@@ -18,12 +18,14 @@ import { CAPTION_MAX, uploadHousePhoto } from "@/lib/housePhotos";
 import { NOTE_MAX, type Note, pinNote, useNotes } from "@/lib/notes";
 import { planting } from "@/lib/plantStore";
 import { usePresence } from "@/lib/presence";
+import LampPanel from "./LampPanel";
 import MailboxPanel from "./MailboxPanel";
 import { FilePicker, Gate, GhostButton, INPUT, PrimaryButton } from "./PlantPanel";
 
 /**
  * The panels the cottage's keepsakes open (the photo wall's gallery, the notes
- * board, and the letter archive on the bookshelf), and the garden's mailbox.
+ * board, and the letter archive on the bookshelf), the garden's mailbox, and
+ * lighting a lamp during a festival.
  */
 export default function Keepsakes() {
   const open = useKeepsakes((s) => s.open);
@@ -47,6 +49,7 @@ const TITLES: Record<Keepsake, string> = {
   notes: "The notes board",
   archive: "Letters we've opened",
   mailbox: "The mailbox",
+  lamp: "Light a lamp",
 };
 
 function Sheet({ which }: { which: Keepsake }) {
@@ -78,7 +81,7 @@ function Sheet({ which }: { which: Keepsake }) {
     >
       <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgb(14_22_48/0.5),rgb(6_9_22/0.88))]" onClick={closeKeepsake} />
       <motion.div
-        className={`relative flex max-h-[88dvh] ${which === "archive" || which === "mailbox" ? "w-[min(94vw,32rem)]" : "w-[min(94vw,44rem)]"} flex-col overflow-hidden rounded-[4px] shadow-letter ${
+        className={`relative flex max-h-[88dvh] ${which === "archive" || which === "mailbox" || which === "lamp" ? "w-[min(94vw,32rem)]" : "w-[min(94vw,44rem)]"} flex-col overflow-hidden rounded-[4px] shadow-letter ${
           cork
             ? "bg-[#b78a5f] bg-[radial-gradient(rgb(90_58_32/0.22)_1px,transparent_1.4px),radial-gradient(rgb(255_236_200/0.16)_1px,transparent_1.6px)] bg-[length:9px_9px,13px_13px] text-ink ring-[10px] ring-inset ring-[#6e4c36]"
             : "paper-creases bg-paper text-ink"
@@ -112,6 +115,7 @@ function Sheet({ which }: { which: Keepsake }) {
           {which === "notes" && <NotesBoard titleId={titleId} />}
           {which === "archive" && <LetterArchive />}
           {which === "mailbox" && <MailboxPanel titleId={titleId} escape={escape} />}
+          {which === "lamp" && <LampPanel titleId={titleId} />}
         </div>
       </motion.div>
     </motion.div>

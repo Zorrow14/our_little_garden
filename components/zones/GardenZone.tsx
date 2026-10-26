@@ -3,6 +3,7 @@
 import CameraRig from "@/components/garden/CameraRig";
 import Cottage from "@/components/garden/Cottage";
 import FallingPetals from "@/components/garden/FallingPetals";
+import Festive from "@/components/garden/festival/Festive";
 import Fence from "@/components/garden/Fence";
 import Fireflies from "@/components/garden/Fireflies";
 import Flowers from "@/components/garden/Flowers";
@@ -31,8 +32,9 @@ import TogetherCue from "@/components/garden/props/TogetherCue";
 
 /**
  * The garden zone: the night garden inside its fence, with its swing, dock,
- * mailbox and stargazing hill; the cottage outside the gate; and the bridge
- * over the brook at the back, to the far garden.
+ * mailbox and stargazing hill; the cottage outside the gate; the bridge
+ * over the brook at the back, to the far garden; and, while a festival is on,
+ * its lights, lamps and fireworks.
  */
 export default function GardenZone() {
   return (
@@ -62,6 +64,7 @@ export default function GardenZone() {
       <Cottage />
       <Fireflies />
       <FallingPetals />
+      <Festive />
       <CameraRig />
     </>
   );

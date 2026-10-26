@@ -56,13 +56,13 @@ let houseAudio: HTMLAudioElement | null = null;
 let houseOk = false;
 let gardenMix: GainNode | null = null;
 let houseMix: GainNode | null = null;
-/** How many voice notes are playing right now. */
-let ducks = 0;
+/** How far each thing playing over the music wants it turned down (a voice note a lot, a firework a little). */
+const ducks: number[] = [];
 let indoors = false;
 
 function targetLevel() {
   const { muted, volume } = useMusic.getState();
-  return muted ? 0 : volume * (ducks > 0 ? DUCKED : 1) * (indoors ? INDOOR_LEVEL : 1);
+  return muted ? 0 : volume * Math.min(1, ...ducks) * (indoors ? INDOOR_LEVEL : 1);
 }
 
 function rampTo(param: AudioParam, value: number, seconds: number) {
@@ -208,15 +208,19 @@ export function setMusicVolume(volume: number) {
   glide(0.1);
 }
 
-/** Quiets the music while a voice note plays. Returns a function that restores it; safe to call more than once. */
-export function duckMusic() {
-  ducks++;
+/**
+ * Quiets the music while a voice note plays (or, a little, under a
+ * firework), to `level` of its volume. Returns a function that restores it;
+ * safe to call more than once.
+ */
+export function duckMusic(level = DUCKED) {
+  ducks.push(level);
   glide(0.6);
   let released = false;
   return () => {
     if (released) return;
     released = true;
-    ducks = Math.max(0, ducks - 1);
+    ducks.splice(ducks.indexOf(level), 1);
     glide(1.2);
   };
 }

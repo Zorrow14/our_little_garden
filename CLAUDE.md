@@ -20,7 +20,7 @@ npm run lint     # next lint
 npx tsc --noEmit -p .
 ```
 
-There is no test suite. Verify changes by running the app. Useful URL flags: `?skipintro` (straight to the garden), `?reset` (forget opened letters), `?debug` (FPS meter, and `window.__gardenRenderer` for `info.render.calls`).
+There is no test suite. Verify changes by running the app. Useful URL flags: `?skipintro` (straight to the garden), `?reset` (forget opened letters), `?debug` (FPS meter, and `window.__gardenRenderer` for `info.render.calls`), `?festival=thadingyut` (a festival on whatever the date; `?festival=off` for none).
 
 - **One `.next` folder:** `next dev` and `next build` both write to it. Stop any running server before building, or the running server breaks with "Cannot find module './NNN.js'".
 - **`.next/types` stubs:** if you delete an `app/` route, run `tsc` after a build, or stale stubs in `.next/types` will report missing modules.
@@ -135,10 +135,11 @@ In the cinematic, the camera flies to the cottage outside the gate, then the doo
 - **Re-entering the garden remounts its scene.** Anything that animates on mount must remember it already ran (see `grown` in `Plants.tsx`).
 - **`?debug` test helpers:** `window.__garden` exposes:
   - `zones`, `player`, `zone()`, `toScreen()`, `exitsOnScreen()`;
-  - `stores`: garden, plants, notes, housePhotos, zone, mail, keepsakes and stargazing;
-  - `seats`, `seated`, `seatRequest` and `night`.
+  - `stores`: garden, plants, notes, housePhotos, zone, mail, keepsakes, stargazing, festival, lamps, lightTogether and fireworkView;
+  - `seats`, `seated`, `seatRequest` and `night`;
+  - `festivalGlow`, `fireworkQueue` and `bowSignals`.
 
-  Tests can stage data in the page without touching Supabase. Never post real mailbox letters from a test: they'd be delivered to the other person.
+  Tests can stage data in the page without touching Supabase. Never post real mailbox letters or light real lamps from a test: they'd show up for the other person. Stage lamps with `stores.lamps.getState().receive(...)`. Fireworks, "light together" and paying respects go out on the real `garden-live` channel, so check that neither of you is online before testing them across two pages.
 
 ### Garden props (`lib/props.ts`, `components/garden/props/`)
 - **Layout:** `lib/props.ts` is pure layout plus a little runtime state. The swing (and the extra tree it hangs from), the dock and the mailbox each have a `Frame` (origin plus yaw, local +z is the front), like the cottage. The stargazing `HILL` lives in `lib/terrain.ts`, because it's part of `groundHeight`.
@@ -178,14 +179,40 @@ In the cinematic, the camera flies to the cottage outside the gate, then the doo
     - `pose` events carry `zone` and, while sitting, `seat`. They're sent about 12 times a second while moving or on the intro walk, and as a 2 s heartbeat while still.
     - `greet` events, for waves.
     - `mail` nudges, when a letter is posted.
+    - During a festival: `firework`, `light-together` and `respects` (see below).
   - **Started once per page:** never torn down, because realtime hands a quick remount the still-closing channel with the same topic.
 - **Replay:** remote poses are timed on the sender's clock, offset by the fastest delivery seen. They're replayed `PLAYBACK_DELAY` behind real time and interpolated (`livePose`).
 - **Going stale:** a gardener whose owner leaves (presence) or goes silent for 8 s (a hidden tab) goes home and wanders there. When updates resume, it hurries over to where they are, or snaps there if it's in another zone.
 - **Shared per-frame state:** `lib/playerInput.ts` holds plain objects for the keyboard and joystick (`PlayerControls`) and your gardener's position. `CameraRig` reads that position to follow you while you walk.
 
+### Festivals (`lib/festivals.ts`, `components/garden/festival/`)
+- **The registry:** `FESTIVALS` holds each festival's id, name, start and end (ISO, Myanmar time, +06:30) and `theme`: dusk sky and light colours, glow colours, the greeting in Burmese and English, and what lighting a lamp is called. Thadingyut is the first. Adding one (Tazaungdaing, say) is just another entry.
+- **Which one is on:** `startFestivalClock` sets `useFestival.festival` from the date, or from `?festival=<id>` / `?festival=off`, and checks every minute, so a festival starts and ends without a reload. Everything festive reads `useFestival` and is gone when it's null.
+- **Glow (`festival/glow.ts`):** `festivalGlow.amount` eases in and out (stepped in `GrowthDriver`), and `Sky` and `Lights` warm toward the theme's dusk by it. `flash` (a firework just burst, near `uFlashAt`) and `boost` (every lantern up, for lighting together) are shader uniforms (`festivalUniforms`, `GLOW_GLSL`), so they cost no real lights.
+- **Decorations (`festival/Decorations.tsx`, garden only):**
+  - **What:** string lights along the fence, cottage eaves and gables, and bridge rails; paper lanterns along the fence, under both gateways, at the cottage and in five trees at the back; candles lining the paths; halos at the cottage windows.
+  - **Where they go:** laid out from the real geometry: `fenceLayout()`, `ringTrees(GARDEN_RING)`, `COTTAGE_ROOF`/`cottageToWorld`, and the bridge's `RAIL_X`/`RAIL_HEIGHT`.
+  - **Cost:** a few instanced meshes with `glowMaterial`, one `Points` of halos (`haloMaterial`) and one `LineSegments` of wires. About 9 extra draw calls.
+- **Lamps (`lib/festivalLamps.ts`, `festival/Lamps.tsx`, table `festival_lamps`):**
+  - **The table:** insert and select only, like `notes`, with no update, delete or truncate grants. The insert policy caps each person at `LAMP_CAP` (30) per festival, and `lit_by` must be Zorrow or Skelly.
+  - **Sync:** like notes (realtime INSERTs filtered to the festival, plus a refetch on reconnect and focus), following whichever festival is on.
+  - **Lighting one:** the `lamp` keepsake panel (`components/ui/LampPanel.tsx`), behind the same passcode gate as notes. The lamp goes `IN_FRONT` of your gardener using `player.yaw`, and floats if that's on the pond.
+  - **Showing them:** a new lamp kindles in (`aBorn`). Hover or tap one for who lit it and the dedication.
+- **Fireworks (`lib/fireworks.ts`, `festival/Fireworks.tsx`):**
+  - **Requests:** `fireworkQueue` holds plain-data requests. Ambient ones go up every 20–40 s. "Launch a firework" is limited to one every `LAUNCH_EVERY` (2 s). Bursts from the other device play only in the garden.
+  - **Particles:** one pooled `Points` simulated on the CPU. The budget (particles, simultaneous bursts, sparks) is smaller on a coarse pointer or low quality.
+  - **Where they burst:** the garden's usual view shows almost no sky. So *watched* bursts (your own, and the finale) set `useFireworkView` and `CameraRig` looks up (`fireworkPose`), then flies back unless you took the camera meanwhile. Unwatched ones are fitted into whatever sky is in view (`placeBurst`/`fitApex`).
+  - **Light together:** both press within `TOGETHER_WINDOW` (plus `GRACE`). Presses are broadcast and held in memory only. Each device then plays the same finale, seeded by both press times, and boosts the lanterns.
+  - **Sound (`lib/fireworkSound.ts`):** Web Audio, made on the spot. It's off by default (remembered per device), silent while the music is muted, and ducks the music a little (`duckMusic(level)`).
+- **Paying respects:** `payRespects()` bumps `bowSignals` for you and broadcasts `respects`. The other device bumps theirs and shows a notice. `Gardeners` plays a bow (`bowing`/`bow`) with hands together, facing the other gardener if they're here, and sets the carried prop aside.
+- **UI:**
+  - **`FestivalMenu`:** bottom right, clear of the joystick. It holds the lamp, firework, light-together and respects actions and the sound switch, plus the "Waiting for…" chip.
+  - **`FestivalGreeting`:** shown once per tab per festival.
+  - **Burmese text:** uses `font-myanmar`, which is Noto Sans Myanmar via `next/font`. It isn't preloaded, so it's only fetched when Burmese text appears.
+
 ### Audio
 - **Music:** `lib/music.ts` streams one `<audio>` element through a Web Audio `GainNode`, because iOS ignores `audio.volume`.
-- **Ducking:** `duckMusic()` returns a restore function; `LetterModal`'s `VoiceNote` calls it while a letter's audio plays.
+- **Ducking:** `duckMusic(level?)` returns a restore function; `LetterModal`'s `VoiceNote` calls it while a letter's audio plays, and fireworks duck it a little.
 - **Controls:** `MusicControl` is the top-right speaker, and the Plant button shifts left when it's showing.
 
 ## Constraints

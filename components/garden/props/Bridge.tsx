@@ -8,8 +8,9 @@ import { getGlowTexture } from "@/lib/textures";
 import { box, NO_RAYCAST, type Part, PropHover, useMergedParts } from "./shared";
 
 const PALETTE = { plank: "#8a6a52", plankLight: "#977660", beam: "#5e4838", stone: "#7a756d", stoneDark: "#67625b" };
-const RAIL_X = 0.47;
-const RAIL_HEIGHT = 0.58;
+/** The handrails: how far out from the middle, and how high above the boards. */
+export const RAIL_X = 0.47;
+export const RAIL_HEIGHT = 0.58;
 
 /** The slope of the boards `lz` along, as a turn about the bridge's x axis. */
 function tilt(b: BridgeSpan, lz: number) {
